@@ -52,12 +52,9 @@ export default async function Dashboard() {
     <div className="min-h-screen bg-[#090b0f] text-white">
       <header className="border-b border-white/5 backdrop-blur-sm sticky top-0 z-50 bg-[#090b0f]/80">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#39A900] flex items-center justify-center">
-              <span className="text-black font-black text-sm">G</span>
-            </div>
-            <span className="font-black text-xl tracking-tight">GO<span className="text-[#39A900]">CLAN</span></span>
-          </div>
+          <a href="/">
+            <img src="/images/Logo.png" alt="GoClan" className="h-9 w-auto" />
+          </a>
           <nav className="hidden md:flex items-center gap-8">
             {["Torneios", "Ranking", "Como Funciona", "Planos"].map((item) => (
               <a key={item} href="#" className="text-sm text-zinc-400 hover:text-white transition-colors">{item}</a>
