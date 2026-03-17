@@ -6,7 +6,7 @@ interface HoloCardProps {
   player: {
     id: number;
     name: string;
-    team: string;
+    team: string | { id: number; name: string; acronym: string; image_url: string | null; location: string; color: string };
     country: string;
     role: string;
     price: number;
@@ -41,6 +41,8 @@ export default function HoloCard({
   });
   const [isFlipped, setIsFlipped] = useState(false);
 
+  const teamName = typeof player.team === "string" ? player.team : player.team.name;
+
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!cardRef.current || isDisabled) return;
     const rect = cardRef.current.getBoundingClientRect();
@@ -73,10 +75,7 @@ export default function HoloCard({
     player.rating >= 1.25 ? "#FFD700" : player.rating >= 1.1 ? "#39A900" : "#94a3b8";
 
   return (
-    <div
-      className="relative"
-      style={{ perspective: "800px" }}
-    >
+    <div className="relative" style={{ perspective: "800px" }}>
       <div
         ref={cardRef}
         onClick={handleClick}
@@ -105,19 +104,17 @@ export default function HoloCard({
           <div
             className="absolute inset-0 pointer-events-none z-10 rounded-2xl"
             style={{
-              background: `
-                linear-gradient(
-                  ${style.shine * 3.6}deg,
-                  transparent 0%,
-                  rgba(255,0,128,0.08) 15%,
-                  rgba(255,165,0,0.08) 30%,
-                  rgba(255,255,0,0.08) 45%,
-                  rgba(0,255,128,0.08) 60%,
-                  rgba(0,128,255,0.08) 75%,
-                  rgba(128,0,255,0.08) 90%,
-                  transparent 100%
-                )
-              `,
+              background: `linear-gradient(
+                ${style.shine * 3.6}deg,
+                transparent 0%,
+                rgba(255,0,128,0.08) 15%,
+                rgba(255,165,0,0.08) 30%,
+                rgba(255,255,0,0.08) 45%,
+                rgba(0,255,128,0.08) 60%,
+                rgba(0,128,255,0.08) 75%,
+                rgba(128,0,255,0.08) 90%,
+                transparent 100%
+              )`,
               opacity: style.glareOpacity,
               mixBlendMode: "color-dodge",
             }}
@@ -137,7 +134,6 @@ export default function HoloCard({
 
         {/* Card content */}
         <div className="p-4 relative z-20">
-          {/* Team color bar */}
           <div
             className="w-full h-1 rounded-full mb-3"
             style={{
@@ -146,7 +142,6 @@ export default function HoloCard({
             }}
           />
 
-          {/* Player avatar */}
           <div
             className="w-16 h-16 rounded-xl mx-auto mb-3 flex items-center justify-center text-2xl font-black border-2 transition-all"
             style={{
@@ -159,39 +154,29 @@ export default function HoloCard({
             {player.name[0]}
           </div>
 
-          {/* Player info */}
           <div className="text-center mb-3">
             <p className="font-black text-white text-sm tracking-wide">{player.name}</p>
-            <p className="text-xs text-zinc-500 mt-0.5">{player.country} {player.team}</p>
+            <p className="text-xs text-zinc-500 mt-0.5">{player.country} {teamName}</p>
             <span className="text-[10px] bg-white/5 border border-white/10 rounded-full px-2 py-0.5 text-zinc-400 mt-1 inline-block">
               {player.role}
             </span>
           </div>
 
-          {/* Stats */}
           <div className="grid grid-cols-3 gap-1 mb-3">
             {[
               { label: "RAT", value: player.rating, highlight: true },
               { label: "K/D", value: player.kd, highlight: false },
               { label: "ADR", value: player.adr, highlight: false },
             ].map((stat) => (
-              <div
-                key={stat.label}
-                className="rounded-lg p-1.5 text-center"
-                style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
-              >
+              <div key={stat.label} className="rounded-lg p-1.5 text-center" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
                 <p className="text-[9px] text-zinc-500 uppercase tracking-wider">{stat.label}</p>
-                <p
-                  className="text-xs font-black"
-                  style={{ color: stat.highlight ? ratingColor : "white" }}
-                >
+                <p className="text-xs font-black" style={{ color: stat.highlight ? ratingColor : "white" }}>
                   {stat.value}
                 </p>
               </div>
             ))}
           </div>
 
-          {/* Price + captain */}
           <div className="flex items-center justify-between">
             <span className="font-black text-sm" style={{ color: player.color }}>
               {player.price} GS$
@@ -211,7 +196,6 @@ export default function HoloCard({
           </div>
         </div>
 
-        {/* Selected checkmark */}
         {isSelected && (
           <div
             className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center z-30"
@@ -223,7 +207,6 @@ export default function HoloCard({
           </div>
         )}
 
-        {/* Captain crown */}
         {isCaptain && (
           <div className="absolute top-2 left-2 z-30">
             <span className="text-lg" style={{ filter: "drop-shadow(0 0 4px #FFD700)" }}>⭐</span>

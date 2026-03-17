@@ -1,43 +1,77 @@
 import { NextResponse } from "next/server";
-import {
-  getTournaments,
-  getUpcomingTournaments,
-  getPastTournaments,
-} from "@/lib/api/pandascore";
+import { getPlayersFromTeams } from "@/lib/api/pandascore";
 
-export async function GET() {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const [running, upcoming, past] = await Promise.all([
-      getTournaments(),
-      getUpcomingTournaments(),
-      getPastTournaments(),
-    ]);
+    const { id } = await params;
+    const tournamentId = parseInt(id);
 
-    // Mapear status para o formato do GoClan
-    const mapStatus = (tournament: any, status: string) => ({
-      id: tournament.id,
-      name: tournament.name,
-      full_name: tournament.full_name || tournament.name,
-      status,
-      begin_at: tournament.begin_at,
-      end_at: tournament.end_at,
-      prizepool: tournament.prizepool,
-      league: tournament.league,
-      serie: tournament.serie,
-      teams: tournament.teams || [],
-    });
+    // Buscar torneio direto da API de torneios que já funciona
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL ? "http://localhost:3000" : "http://localhost:3000"}/api/tournaments`,
+      { next: { revalidate: 300 } }
+    );
+    const data = await res.json();
 
-    const tournaments = [
-      ...running.map((t: any) => mapStatus(t, "EM ANDAMENTO")),
-      ...upcoming.map((t: any) => mapStatus(t, "ABERTO")),
-      ...past.map((t: any) => mapStatus(t, "FINALIZADO")),
-    ];
+    // Encontrar o torneio pelo ID
+    const tournament = data.tournaments?.find((t: any) => t.id === tournamentId);
 
-    return NextResponse.json({ tournaments });
+    if (!tournament) {
+      return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    }
+
+    // Usar os times que já vieram no torneio
+    const teams = tournament.teams || [];
+
+    if (teams.length === 0) {
+      return NextResponse.json({ players: [], teams: [] });
+    }
+
+    // Buscar jogadores de cada time via filter
+    const teamsWithPlayers = await getPlayersFromTeams(
+      teams.map((t: any) => ({
+        id: t.id,
+        name: t.name,
+        acronym: t.acronym,
+        image_url: t.image_url,
+        location: t.location,
+      }))
+    );
+
+    // Flatten players
+    const players = teamsWithPlayers.flatMap((team: any) =>
+      (team.players || []).map((player: any) => ({
+        id: player.id,
+        name: player.name,
+        first_name: player.first_name,
+        last_name: player.last_name,
+        image_url: player.image_url,
+        nationality: player.nationality,
+        role: player.role || "Rifler",
+        team: {
+          id: team.id,
+          name: team.name,
+          acronym: team.acronym,
+          image_url: team.image_url,
+          location: team.location,
+        },
+        stats: {
+          rating: 1.0,
+          kd_ratio: 1.0,
+          adr: 70.0,
+        },
+        price: [120, 160, 200, 240, 280][Math.floor(Math.random() * 5)],
+      }))
+    );
+
+    return NextResponse.json({ players, teams });
   } catch (error) {
-    console.error("PandaScore error:", error);
+    console.error("Players error:", error);
     return NextResponse.json(
-      { error: "Erro ao buscar torneios" },
+      { error: "Erro ao buscar jogadores" },
       { status: 500 }
     );
   }

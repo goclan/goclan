@@ -2,21 +2,7 @@
 
 import { useState } from "react";
 import HoloCard from "@/components/card/HoloCard";
-
-const players = [
-  { id: 1, name: "KSCERATO", team: "FURIA", country: "🇧🇷", role: "Rifler", price: 280, rating: 1.21, kd: 1.35, adr: 78.4, color: "#FF6B00" },
-  { id: 2, name: "FalleN", team: "FURIA", country: "🇧🇷", role: "AWPer", price: 260, rating: 1.15, kd: 1.22, adr: 74.1, color: "#FF6B00" },
-  { id: 3, name: "chelo", team: "FURIA", country: "🇧🇷", role: "Rifler", price: 210, rating: 1.08, kd: 1.12, adr: 71.2, color: "#FF6B00" },
-  { id: 4, name: "skullz", team: "FURIA", country: "🇧🇷", role: "Support", price: 190, rating: 1.04, kd: 1.08, adr: 68.5, color: "#FF6B00" },
-  { id: 5, name: "yuurih", team: "FURIA", country: "🇧🇷", role: "Rifler", price: 240, rating: 1.18, kd: 1.28, adr: 76.3, color: "#FF6B00" },
-  { id: 6, name: "s1mple", team: "NAVI", country: "🇺🇦", role: "AWPer", price: 300, rating: 1.38, kd: 1.52, adr: 89.1, color: "#FFD700" },
-  { id: 7, name: "b1t", team: "NAVI", country: "🇺🇦", role: "Rifler", price: 220, rating: 1.12, kd: 1.18, adr: 72.8, color: "#FFD700" },
-  { id: 8, name: "electronic", team: "NAVI", country: "🇷🇺", role: "Rifler", price: 235, rating: 1.16, kd: 1.24, adr: 75.1, color: "#FFD700" },
-  { id: 9, name: "karrigan", team: "FaZe", country: "🇩🇰", role: "IGL", price: 195, rating: 1.02, kd: 1.05, adr: 65.4, color: "#00D4FF" },
-  { id: 10, name: "ropz", team: "FaZe", country: "🇪🇪", role: "Rifler", price: 270, rating: 1.24, kd: 1.38, adr: 80.2, color: "#00D4FF" },
-  { id: 11, name: "broky", team: "FaZe", country: "🇱🇻", role: "AWPer", price: 255, rating: 1.19, kd: 1.31, adr: 77.6, color: "#00D4FF" },
-  { id: 12, name: "ZywOo", team: "Vitality", country: "🇫🇷", role: "AWPer", price: 295, rating: 1.35, kd: 1.48, adr: 87.3, color: "#8B5CF6" },
-];
+import { MOCK_PLAYERS, MOCK_TEAMS, getFlagEmoji } from "@/lib/data/players";
 
 const BUDGET = 1000;
 const MAX_PER_TEAM = 2;
@@ -29,23 +15,25 @@ export default function MontarTime() {
   const [search, setSearch] = useState("");
 
   const spent = selectedPlayers.reduce((acc, id) => {
-    const p = players.find((p) => p.id === id);
+    const p = MOCK_PLAYERS.find((p) => p.id === id);
     return acc + (p?.price || 0);
   }, 0);
   const remaining = BUDGET - spent;
 
-  const teamCount = (team: string) =>
-    selectedPlayers.filter((id) => players.find((p) => p.id === id)?.team === team).length;
+  const teamCount = (teamName: string) =>
+    selectedPlayers.filter(
+      (id) => MOCK_PLAYERS.find((p) => p.id === id)?.team.name === teamName
+    ).length;
 
-  const canSelect = (player: typeof players[0]) => {
+  const canSelect = (player: typeof MOCK_PLAYERS[0]) => {
     if (selectedPlayers.includes(player.id)) return true;
     if (selectedPlayers.length >= MAX_PLAYERS) return false;
     if (remaining < player.price) return false;
-    if (teamCount(player.team) >= MAX_PER_TEAM) return false;
+    if (teamCount(player.team.name) >= MAX_PER_TEAM) return false;
     return true;
   };
 
-  const togglePlayer = (player: typeof players[0]) => {
+  const togglePlayer = (player: typeof MOCK_PLAYERS[0]) => {
     if (selectedPlayers.includes(player.id)) {
       setSelectedPlayers(selectedPlayers.filter((id) => id !== player.id));
       if (captain === player.id) setCaptain(null);
@@ -54,12 +42,13 @@ export default function MontarTime() {
     }
   };
 
-  const teams = [...new Set(players.map((p) => p.team))];
-  const filtered = players.filter((p) => {
-    if (filter !== "TODOS" && p.team !== filter) return false;
+  const filtered = MOCK_PLAYERS.filter((p) => {
+    if (filter !== "TODOS" && p.team.name !== filter) return false;
     if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  const teams = MOCK_TEAMS.map((t) => t.name);
 
   return (
     <div className="min-h-screen bg-[#090b0f] text-white">
@@ -101,13 +90,19 @@ export default function MontarTime() {
         {/* Left — player selection */}
         <div className="lg:col-span-2">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-black">Escolha seus jogadores</h2>
-            <p className="text-zinc-500 text-sm">Máx. 2 do mesmo time</p>
+            <div>
+              <h2 className="text-2xl font-black">Escolha seus jogadores</h2>
+              <p className="text-zinc-500 text-sm mt-1">Orçamento: {BUDGET} GS$ • Máx. 2 do mesmo time</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-zinc-500">Jogadores disponíveis</p>
+              <p className="font-black text-white">{filtered.length}</p>
+            </div>
           </div>
 
           {/* Search and filters */}
-          <div className="flex gap-3 mb-6">
-            <div className="relative flex-1">
+          <div className="flex flex-col gap-3 mb-6">
+            <div className="relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -119,12 +114,14 @@ export default function MontarTime() {
                 className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#39A900]/50 transition-all"
               />
             </div>
-            <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/5">
+            <div className="flex gap-2 flex-wrap">
               {["TODOS", ...teams].map((t) => (
                 <button
                   key={t}
                   onClick={() => setFilter(t)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === t ? "bg-[#39A900] text-black" : "text-zinc-500 hover:text-white"}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    filter === t ? "bg-[#39A900] text-black" : "bg-white/5 border border-white/10 text-zinc-500 hover:text-white"
+                  }`}
                 >
                   {t}
                 </button>
@@ -132,12 +129,19 @@ export default function MontarTime() {
             </div>
           </div>
 
-          {/* Player cards grid — usando HoloCard */}
+          {/* Player cards grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {filtered.map((player) => (
               <HoloCard
                 key={player.id}
-                player={player}
+                player={{
+                  ...player,
+                  country: getFlagEmoji(player.nationality),
+                  rating: player.stats.rating,
+                  kd: player.stats.kd_ratio,
+                  adr: player.stats.adr,
+                  color: player.team.color,
+                }}
                 isSelected={selectedPlayers.includes(player.id)}
                 isCaptain={captain === player.id}
                 isDisabled={!canSelect(player)}
@@ -171,13 +175,19 @@ export default function MontarTime() {
                   }}
                 />
               </div>
+              <div className="flex justify-between mt-2">
+                <span className="text-xs text-zinc-600">Gasto</span>
+                <span className={`text-xs font-bold ${remaining < 100 ? "text-red-400" : "text-[#39A900]"}`}>
+                  {remaining} GS$ restantes
+                </span>
+              </div>
             </div>
 
             {/* Player slots */}
             <div className="flex flex-col gap-3 mb-6">
               {Array.from({ length: MAX_PLAYERS }).map((_, i) => {
                 const playerId = selectedPlayers[i];
-                const player = playerId ? players.find((p) => p.id === playerId) : null;
+                const player = playerId ? MOCK_PLAYERS.find((p) => p.id === playerId) : null;
                 const isCap = captain === playerId;
 
                 return (
@@ -190,11 +200,11 @@ export default function MontarTime() {
                     {player ? (
                       <>
                         <div
-                          className="w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm border"
+                          className="w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm border shrink-0"
                           style={{
-                            backgroundColor: `${player.color}15`,
-                            borderColor: `${player.color}30`,
-                            color: player.color,
+                            backgroundColor: `${player.team.color}15`,
+                            borderColor: `${player.team.color}30`,
+                            color: player.team.color,
                           }}
                         >
                           {player.name[0]}
@@ -204,11 +214,13 @@ export default function MontarTime() {
                             <p className="font-bold text-sm text-white truncate">{player.name}</p>
                             {isCap && <span className="text-yellow-400 text-xs">⭐</span>}
                           </div>
-                          <p className="text-xs text-zinc-500">{player.team} • {player.price} GS$</p>
+                          <p className="text-xs text-zinc-500">
+                            {getFlagEmoji(player.nationality)} {player.team.name} • {player.price} GS$
+                          </p>
                         </div>
                         <button
                           onClick={() => togglePlayer(player)}
-                          className="text-zinc-600 hover:text-red-400 transition-colors"
+                          className="text-zinc-600 hover:text-red-400 transition-colors shrink-0"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -217,7 +229,7 @@ export default function MontarTime() {
                       </>
                     ) : (
                       <div className="flex items-center gap-3 text-zinc-600">
-                        <div className="w-10 h-10 rounded-lg border border-dashed border-white/10 flex items-center justify-center text-lg">
+                        <div className="w-10 h-10 rounded-lg border border-dashed border-white/10 flex items-center justify-center text-lg shrink-0">
                           {i + 1}
                         </div>
                         <span className="text-sm">Jogador {i + 1}</span>
@@ -233,6 +245,25 @@ export default function MontarTime() {
               <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 mb-4 flex items-center gap-2">
                 <span className="text-yellow-400">⭐</span>
                 <p className="text-xs text-yellow-400">Escolha um capitão! Ele pontua em dobro.</p>
+              </div>
+            )}
+
+            {/* Team summary */}
+            {selectedPlayers.length > 0 && (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4">
+                <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Times selecionados</p>
+                {Object.entries(
+                  selectedPlayers.reduce((acc, id) => {
+                    const team = MOCK_PLAYERS.find((p) => p.id === id)?.team.name || "";
+                    acc[team] = (acc[team] || 0) + 1;
+                    return acc;
+                  }, {} as Record<string, number>)
+                ).map(([team, count]) => (
+                  <div key={team} className="flex justify-between text-xs text-zinc-400 py-0.5">
+                    <span>{team}</span>
+                    <span>{count}/2</span>
+                  </div>
+                ))}
               </div>
             )}
 

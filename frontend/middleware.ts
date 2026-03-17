@@ -28,7 +28,7 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   // Rotas protegidas — redireciona para login se não autenticado
-  const protectedRoutes = ["/torneio", "/ranking"];
+  const protectedRoutes = ["/ranking"];
   const isProtected = protectedRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route)
   );
