@@ -1,20 +1,83 @@
 "use client";
 
 import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 export default function Cadastro() {
   const [step, setStep] = useState(1);
-  const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [nome, setNome] = useState("");
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const router = useRouter();
+  const supabase = createClient();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (step === 1) { setStep(2); return; }
+    setError("");
+    if (password.length < 8) {
+      setError("A senha deve ter pelo menos 8 caracteres.");
+      return;
+    }
+    setStep(2);
+  };
+
+  const handleStep2 = async (e: React.FormEvent) => {
+    e.preventDefault();
     setLoading(true);
-    setTimeout(() => setLoading(false), 1500);
+    setError("");
+
+    if (!username.trim()) {
+      setError("Nome de usuário é obrigatório.");
+      setLoading(false);
+      return;
+    }
+
+    // Criar conta no Supabase
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: nome,
+          username: username.toLowerCase().trim(),
+        },
+      },
+    });
+
+    if (signUpError) {
+      setError(
+        signUpError.message === "User already registered"
+          ? "Este email já está cadastrado."
+          : signUpError.message
+      );
+      setLoading(false);
+      return;
+    }
+
+    if (data.user) {
+      // Salvar username no perfil
+      await supabase
+        .from("profiles")
+        .update({
+          username: username.toLowerCase().trim(),
+          full_name: nome,
+        })
+        .eq("id", data.user.id);
+    }
+
+    router.push("/");
+    router.refresh();
+  };
+
+  const handleGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
   };
 
   return (
@@ -34,7 +97,6 @@ export default function Cadastro() {
             backgroundSize: `60px 60px`,
           }}
         />
-
         <div className="relative z-10 text-center px-12">
           <div className="flex items-center justify-center gap-3 mb-12">
             <div className="w-12 h-12 rounded-xl bg-[#39A900] flex items-center justify-center">
@@ -44,7 +106,6 @@ export default function Cadastro() {
               GO<span className="text-[#39A900]">CLAN</span>
             </span>
           </div>
-
           <h2 className="text-4xl font-black mb-4 leading-tight">
             Sua conta.<br />
             <span className="text-[#39A900]">1.000 GS$ grátis.</span>
@@ -52,8 +113,6 @@ export default function Cadastro() {
           <p className="text-zinc-500 text-lg max-w-sm mx-auto mb-10">
             Crie sua conta agora e receba GS$ para montar seu primeiro time sem gastar nada.
           </p>
-
-          {/* Benefits */}
           <div className="flex flex-col gap-3 text-left max-w-xs mx-auto">
             {[
               "1.000 GS$ de boas-vindas",
@@ -74,7 +133,7 @@ export default function Cadastro() {
         </div>
       </div>
 
-      {/* Right side — form */}
+      {/* Right side */}
       <div className="flex-1 lg:max-w-md flex items-center justify-center px-8 py-12">
         <div className="w-full max-w-sm">
 
@@ -116,11 +175,19 @@ export default function Cadastro() {
             {step === 1 ? "Comece grátis, sem cartão." : "Como você quer ser chamado?"}
           </p>
 
-          {step === 1 && (
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 mb-4">
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
+          )}
+
+          {step === 1 ? (
             <>
-              {/* Social login */}
               <div className="flex flex-col gap-3 mb-6">
-                <button className="flex items-center justify-center gap-3 w-full py-3 px-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all text-sm font-semibold">
+                <button
+                  onClick={handleGoogle}
+                  className="flex items-center justify-center gap-3 w-full py-3 px-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all text-sm font-semibold"
+                >
                   <svg className="w-5 h-5" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -129,25 +196,13 @@ export default function Cadastro() {
                   </svg>
                   Cadastrar com Google
                 </button>
-                <button className="flex items-center justify-center gap-3 w-full py-3 px-4 rounded-xl border border-[#1b2838]/50 bg-[#1b2838]/50 hover:bg-[#1b2838] transition-all text-sm font-semibold">
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#c7d5e0">
-                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-                  </svg>
-                  Cadastrar com Steam
-                </button>
               </div>
-
               <div className="flex items-center gap-4 mb-6">
                 <div className="flex-1 h-px bg-white/10" />
                 <span className="text-zinc-600 text-xs uppercase tracking-widest">ou</span>
                 <div className="flex-1 h-px bg-white/10" />
               </div>
-            </>
-          )}
-
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {step === 1 ? (
-              <>
+              <form onSubmit={handleStep1} className="flex flex-col gap-4">
                 <div>
                   <label className="text-xs text-zinc-500 uppercase tracking-wider mb-2 block">Email</label>
                   <input
@@ -155,7 +210,8 @@ export default function Cadastro() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="seu@email.com"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#39A900]/50 focus:bg-white/[0.07] transition-all"
+                    required
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#39A900]/50 transition-all"
                   />
                 </div>
                 <div>
@@ -165,60 +221,76 @@ export default function Cadastro() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Mínimo 8 caracteres"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#39A900]/50 focus:bg-white/[0.07] transition-all"
+                    required
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#39A900]/50 transition-all"
                   />
                 </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <label className="text-xs text-zinc-500 uppercase tracking-wider mb-2 block">Nome completo</label>
+                <button
+                  type="submit"
+                  className="w-full bg-[#39A900] hover:bg-[#45C500] text-black font-black py-3 rounded-xl transition-all mt-2"
+                >
+                  Continuar
+                </button>
+              </form>
+            </>
+          ) : (
+            <form onSubmit={handleStep2} className="flex flex-col gap-4">
+              <div>
+                <label className="text-xs text-zinc-500 uppercase tracking-wider mb-2 block">Nome completo</label>
+                <input
+                  type="text"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  placeholder="Seu nome"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#39A900]/50 transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500 uppercase tracking-wider mb-2 block">Nome de usuário</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">@</span>
                   <input
                     type="text"
-                    value={nome}
-                    onChange={(e) => setNome(e.target.value)}
-                    placeholder="Seu nome"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#39A900]/50 focus:bg-white/[0.07] transition-all"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.replace(/[^a-z0-9_]/gi, "").toLowerCase())}
+                    placeholder="seunome"
+                    required
+                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#39A900]/50 transition-all"
                   />
                 </div>
+                <p className="text-xs text-zinc-600 mt-1">Aparece no ranking público — apenas letras, números e _</p>
+              </div>
+
+              {/* GS$ bonus */}
+              <div className="bg-[#39A900]/10 border border-[#39A900]/20 rounded-xl p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#39A900]/20 border border-[#39A900]/30 flex items-center justify-center shrink-0">
+                  <span className="text-[#39A900] font-black text-sm">GS</span>
+                </div>
                 <div>
-                  <label className="text-xs text-zinc-500 uppercase tracking-wider mb-2 block">Nome de usuário</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">@</span>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="seunome"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#39A900]/50 focus:bg-white/[0.07] transition-all"
-                    />
-                  </div>
-                  <p className="text-xs text-zinc-600 mt-1">Aparece no ranking público</p>
+                  <p className="text-sm font-bold text-white">+1.000 GS$ de boas-vindas</p>
+                  <p className="text-xs text-zinc-500">Creditados automaticamente ao criar a conta</p>
                 </div>
+              </div>
 
-                {/* GS$ welcome bonus */}
-                <div className="bg-[#39A900]/10 border border-[#39A900]/20 rounded-xl p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#39A900]/20 border border-[#39A900]/30 flex items-center justify-center shrink-0">
-                    <span className="text-[#39A900] font-black text-sm">GS</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-white">+1.000 GS$ de boas-vindas</p>
-                    <p className="text-xs text-zinc-500">Creditados automaticamente ao criar a conta</p>
-                  </div>
-                </div>
-              </>
-            )}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#39A900] hover:bg-[#45C500] disabled:bg-[#39A900]/50 text-black font-black py-3 rounded-xl transition-all mt-2 flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                ) : "Criar minha conta"}
+              </button>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-[#39A900] hover:bg-[#45C500] disabled:bg-[#39A900]/50 text-black font-black py-3 rounded-xl transition-all mt-2 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-              ) : step === 1 ? "Continuar" : "Criar minha conta"}
-            </button>
-          </form>
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="text-sm text-zinc-500 hover:text-white transition-colors text-center"
+              >
+                ← Voltar
+              </button>
+            </form>
+          )}
 
           <p className="text-center text-zinc-600 text-sm mt-6">
             Já tem conta?{" "}
