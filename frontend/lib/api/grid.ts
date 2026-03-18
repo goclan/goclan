@@ -139,12 +139,10 @@ export async function getTournamentTeamsAndPlayers(gridTournamentId: string) {
   const result = [];
   for (const team of teams) {
     try {
-      await sleep(200);
+      await sleep(500);
       const players = await getPlayersByTeamId(team.id);
-      console.log(`Team ${team.name}: ${players.length} players`);
       result.push({ ...team, players });
     } catch (e) {
-      console.log(`Team ${team.name}: error - ${e}`);
       result.push({ ...team, players: [] });
     }
   }

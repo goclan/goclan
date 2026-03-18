@@ -1,39 +1,83 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import HoloCard from "@/components/card/HoloCard";
-import { MOCK_PLAYERS, MOCK_TEAMS, getFlagEmoji } from "@/lib/data/players";
+import { createClient } from "@/lib/supabase/client";
 
 const BUDGET = 1000;
 const MAX_PER_TEAM = 2;
 const MAX_PLAYERS = 5;
 
+function getHoloTier(price: number): "prisma" | "galaxy" | "aurora" | "chrome" | "matte" | "none" {
+  if (price >= 290) return "prisma";
+  if (price >= 260) return "galaxy";
+  if (price >= 220) return "aurora";
+  if (price >= 180) return "chrome";
+  if (price >= 150) return "matte";
+  return "none";
+}
+
+const TIER_STARS: Record<string, { stars: number; label: string; color: string }> = {
+  prisma: { stars: 5, label: "⭐⭐⭐⭐⭐ Prisma", color: "#FFD700" },
+  galaxy: { stars: 4, label: "⭐⭐⭐⭐ Galaxy", color: "#A855F7" },
+  aurora: { stars: 3, label: "⭐⭐⭐ Aurora", color: "#10B981" },
+  chrome: { stars: 2, label: "⭐⭐ Chrome", color: "#94a3b8" },
+  matte: { stars: 1, label: "⭐ Matte", color: "#64748b" },
+  none: { stars: 0, label: "Standard", color: "#374151" },
+};
+
 export default function MontarTime() {
-  const [selectedPlayers, setSelectedPlayers] = useState<number[]>([]);
-  const [captain, setCaptain] = useState<number | null>(null);
-  const [filter, setFilter] = useState("TODOS");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const tournamentId = searchParams.get("tournament") || "775590";
+  const tournamentName = searchParams.get("name") || "Torneio";
+
+  const [players, setPlayers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
+  const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
+  const [captain, setCaptain] = useState<string | null>(null);
+  const [filterTeam, setFilterTeam] = useState("TODOS");
+  const [filterTier, setFilterTier] = useState("TODOS");
   const [search, setSearch] = useState("");
 
+  useEffect(() => {
+    async function fetchPlayers() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/grid/tournaments/${tournamentId}/players`);
+        const data = await res.json();
+        setPlayers(data.players || []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchPlayers();
+  }, [tournamentId]);
+
   const spent = selectedPlayers.reduce((acc, id) => {
-    const p = MOCK_PLAYERS.find((p) => p.id === id);
+    const p = players.find((p) => p.id === id);
     return acc + (p?.price || 0);
   }, 0);
   const remaining = BUDGET - spent;
 
   const teamCount = (teamName: string) =>
     selectedPlayers.filter(
-      (id) => MOCK_PLAYERS.find((p) => p.id === id)?.team.name === teamName
+      (id) => players.find((p) => p.id === id)?.team?.name === teamName
     ).length;
 
-  const canSelect = (player: typeof MOCK_PLAYERS[0]) => {
+  const canSelect = (player: any) => {
     if (selectedPlayers.includes(player.id)) return true;
     if (selectedPlayers.length >= MAX_PLAYERS) return false;
     if (remaining < player.price) return false;
-    if (teamCount(player.team.name) >= MAX_PER_TEAM) return false;
+    if (teamCount(player.team?.name) >= MAX_PER_TEAM) return false;
     return true;
   };
 
-  const togglePlayer = (player: typeof MOCK_PLAYERS[0]) => {
+  const togglePlayer = (player: any) => {
     if (selectedPlayers.includes(player.id)) {
       setSelectedPlayers(selectedPlayers.filter((id) => id !== player.id));
       if (captain === player.id) setCaptain(null);
@@ -42,17 +86,96 @@ export default function MontarTime() {
     }
   };
 
-  const filtered = MOCK_PLAYERS.filter((p) => {
-    if (filter !== "TODOS" && p.team.name !== filter) return false;
+  // Time aleatório
+  const randomTeam = useCallback(() => {
+    const shuffled = [...players].sort(() => Math.random() - 0.5);
+    const picked: any[] = [];
+    const teamCounts: Record<string, number> = {};
+    let budget = BUDGET;
+
+    for (const player of shuffled) {
+      if (picked.length >= MAX_PLAYERS) break;
+      const team = player.team?.name || "";
+      if ((teamCounts[team] || 0) >= MAX_PER_TEAM) continue;
+      if (player.price > budget) continue;
+
+      picked.push(player);
+      teamCounts[team] = (teamCounts[team] || 0) + 1;
+      budget -= player.price;
+    }
+
+    if (picked.length === MAX_PLAYERS) {
+      setSelectedPlayers(picked.map((p) => p.id));
+      // Define o capitão como o de maior rating
+      const cap = picked.reduce((a, b) => (a.rating > b.rating ? a : b));
+      setCaptain(cap.id);
+    }
+  }, [players]);
+
+  const handleConfirm = async () => {
+    if (selectedPlayers.length !== MAX_PLAYERS || !captain) return;
+    setConfirming(true);
+
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      const selectedData = selectedPlayers.map((id) =>
+        players.find((p) => p.id === id)
+      );
+
+      const { data, error } = await supabase
+        .from("lineups")
+        .insert({
+          user_id: user.id,
+          tournament_id: parseInt(tournamentId),
+          tournament_name: tournamentName,
+          players: selectedData,
+          captain_id: captain,
+          status: "pending",
+          phase: 1,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      router.push(`/torneio/${tournamentId}/resultado?lineup=${data.id}`);
+    } catch (e) {
+      console.error("Erro ao confirmar time:", e);
+      alert("Erro ao confirmar time. Tente novamente.");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const filtered = players.filter((p) => {
+    if (filterTeam !== "TODOS" && p.team?.name !== filterTeam) return false;
+    if (filterTier !== "TODOS" && getHoloTier(p.price) !== filterTier) return false;
     if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  const teams = MOCK_TEAMS.map((t) => t.name);
+  const uniqueTeams = [...new Set(players.map((p) => p.team?.name).filter(Boolean))];
+  const isReady = selectedPlayers.length === MAX_PLAYERS && !!captain;
+
+  const tierFilters = [
+    { key: "TODOS", label: "Todos", color: "#94a3b8" },
+    { key: "prisma", label: "⭐⭐⭐⭐⭐", color: "#FFD700" },
+    { key: "galaxy", label: "⭐⭐⭐⭐", color: "#A855F7" },
+    { key: "aurora", label: "⭐⭐⭐", color: "#10B981" },
+    { key: "chrome", label: "⭐⭐", color: "#94a3b8" },
+    { key: "matte", label: "⭐", color: "#64748b" },
+    { key: "none", label: "★", color: "#374151" },
+  ];
 
   return (
     <div className="min-h-screen bg-[#090b0f] text-white">
-      {/* Header */}
       <header className="border-b border-white/5 backdrop-blur-sm sticky top-0 z-50 bg-[#090b0f]/90">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -64,7 +187,7 @@ export default function MontarTime() {
             </a>
             <div className="w-px h-4 bg-white/10" />
             <div>
-              <span className="font-black text-white">ESL Pro League S23</span>
+              <span className="font-black text-white">{tournamentName}</span>
               <span className="ml-2 text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2 py-0.5 rounded-full">ABERTO</span>
             </div>
           </div>
@@ -76,32 +199,44 @@ export default function MontarTime() {
               </p>
             </div>
             <button
-              disabled={selectedPlayers.length !== MAX_PLAYERS}
+              onClick={handleConfirm}
+              disabled={!isReady || confirming}
               className="bg-[#39A900] hover:bg-[#45C500] disabled:bg-zinc-700 disabled:text-zinc-500 text-black font-black px-6 py-2.5 rounded-xl transition-all text-sm"
             >
-              Confirmar Time ({selectedPlayers.length}/5)
+              {confirming ? "Salvando..." : `Confirmar Time (${selectedPlayers.length}/5)`}
             </button>
           </div>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-        {/* Left — player selection */}
         <div className="lg:col-span-2">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-black">Escolha seus jogadores</h2>
               <p className="text-zinc-500 text-sm mt-1">Orçamento: {BUDGET} GS$ • Máx. 2 do mesmo time</p>
             </div>
-            <div className="text-right">
-              <p className="text-xs text-zinc-500">Jogadores disponíveis</p>
-              <p className="font-black text-white">{filtered.length}</p>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="text-xs text-zinc-500">Disponíveis</p>
+                <p className="font-black text-white">{loading ? "..." : filtered.length}</p>
+              </div>
+              <button
+                onClick={randomTeam}
+                disabled={loading || players.length === 0}
+                className="flex items-center gap-2 bg-white/5 hover:bg-[#39A900]/20 border border-white/10 hover:border-[#39A900]/40 text-zinc-400 hover:text-[#39A900] font-bold px-3 py-2 rounded-xl transition-all text-xs disabled:opacity-40"
+                title="Montar time aleatório"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Aleatório
+              </button>
             </div>
           </div>
 
-          {/* Search and filters */}
           <div className="flex flex-col gap-3 mb-6">
+            {/* Busca */}
             <div className="relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -114,13 +249,37 @@ export default function MontarTime() {
                 className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#39A900]/50 transition-all"
               />
             </div>
-            <div className="flex gap-2 flex-wrap">
-              {["TODOS", ...teams].map((t) => (
+
+            {/* Filtro por tier (estrelas) */}
+            <div className="flex gap-2 flex-wrap items-center">
+              <span className="text-xs text-zinc-600 uppercase tracking-wider">Tier:</span>
+              {tierFilters.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setFilterTier(t.key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                    filterTier === t.key
+                      ? "text-black border-transparent"
+                      : "bg-white/5 border-white/10 text-zinc-500 hover:text-white"
+                  }`}
+                  style={filterTier === t.key ? { backgroundColor: t.color, borderColor: t.color } : {}}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Filtro por time */}
+            <div className="flex gap-2 flex-wrap items-center">
+              <span className="text-xs text-zinc-600 uppercase tracking-wider">Time:</span>
+              {["TODOS", ...uniqueTeams].map((t) => (
                 <button
                   key={t}
-                  onClick={() => setFilter(t)}
+                  onClick={() => setFilterTeam(t)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    filter === t ? "bg-[#39A900] text-black" : "bg-white/5 border border-white/10 text-zinc-500 hover:text-white"
+                    filterTeam === t
+                      ? "bg-[#39A900] text-black"
+                      : "bg-white/5 border border-white/10 text-zinc-500 hover:text-white"
                   }`}
                 >
                   {t}
@@ -129,38 +288,51 @@ export default function MontarTime() {
             </div>
           </div>
 
-          {/* Player cards grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {filtered.map((player) => (
-              <HoloCard
-                key={player.id}
-                player={{
-                  ...player,
-                  country: getFlagEmoji(player.nationality),
-                  rating: player.stats.rating,
-                  kd: player.stats.kd_ratio,
-                  adr: player.stats.adr,
-                  color: player.team.color,
-                }}
-                isSelected={selectedPlayers.includes(player.id)}
-                isCaptain={captain === player.id}
-                isDisabled={!canSelect(player)}
-                onClick={() => togglePlayer(player)}
-                onCaptainClick={(e) => {
-                  e.stopPropagation();
-                  setCaptain(captain === player.id ? null : player.id);
-                }}
-              />
-            ))}
-          </div>
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-10 h-10 border-2 border-[#39A900]/30 border-t-[#39A900] rounded-full animate-spin" />
+                <p className="text-zinc-500 text-sm">Buscando jogadores do torneio...</p>
+              </div>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-20 text-zinc-500">
+              <p>Nenhum jogador encontrado.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {filtered.map((player) => (
+                <HoloCard
+                  key={player.id}
+                  player={{
+                    ...player,
+                    country: "🌍",
+                    rating: player.rating,
+                    kd: player.kd,
+                    adr: player.adr,
+                    color: player.color,
+                  }}
+                  isSelected={selectedPlayers.includes(player.id)}
+                  isCaptain={captain === player.id}
+                  isDisabled={!canSelect(player)}
+                  onClick={() => togglePlayer(player)}
+                  onCaptainClick={(e) => {
+                    e.stopPropagation();
+                    if (selectedPlayers.includes(player.id)) {
+                      setCaptain(captain === player.id ? null : player.id);
+                    }
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Right — selected team */}
+        {/* Sidebar */}
         <div className="lg:col-span-1">
           <div className="sticky top-24">
             <h2 className="text-xl font-black mb-4">Seu Time</h2>
 
-            {/* Budget bar */}
             <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
               <div className="flex justify-between mb-2">
                 <span className="text-xs text-zinc-500 uppercase tracking-wider">Orçamento</span>
@@ -183,12 +355,13 @@ export default function MontarTime() {
               </div>
             </div>
 
-            {/* Player slots */}
             <div className="flex flex-col gap-3 mb-6">
               {Array.from({ length: MAX_PLAYERS }).map((_, i) => {
                 const playerId = selectedPlayers[i];
-                const player = playerId ? MOCK_PLAYERS.find((p) => p.id === playerId) : null;
+                const player = playerId ? players.find((p) => p.id === playerId) : null;
                 const isCap = captain === playerId;
+                const tier = player ? getHoloTier(player.price) : "none";
+                const tierInfo = TIER_STARS[tier];
 
                 return (
                   <div
@@ -200,22 +373,24 @@ export default function MontarTime() {
                     {player ? (
                       <>
                         <div
-                          className="w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm border shrink-0"
+                          className="w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm border shrink-0 cursor-pointer"
                           style={{
-                            backgroundColor: `${player.team.color}15`,
-                            borderColor: `${player.team.color}30`,
-                            color: player.team.color,
+                            backgroundColor: isCap ? "#FFD70020" : `${player.color}15`,
+                            borderColor: isCap ? "#FFD70060" : `${player.color}30`,
+                            color: isCap ? "#FFD700" : player.color,
                           }}
+                          onClick={() => setCaptain(captain === player.id ? null : player.id)}
+                          title="Clique para definir como capitão"
                         >
-                          {player.name[0]}
+                          {isCap ? "⭐" : player.name.slice(0, 2).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1">
                             <p className="font-bold text-sm text-white truncate">{player.name}</p>
-                            {isCap && <span className="text-yellow-400 text-xs">⭐</span>}
+                            {isCap && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 rounded-full">CAP</span>}
                           </div>
-                          <p className="text-xs text-zinc-500">
-                            {getFlagEmoji(player.nationality)} {player.team.name} • {player.price} GS$
+                          <p className="text-xs" style={{ color: tierInfo.color }}>
+                            {tierInfo.label.split(" ")[0]} {player.team?.name} • {player.price} GS$
                           </p>
                         </div>
                         <button
@@ -240,40 +415,40 @@ export default function MontarTime() {
               })}
             </div>
 
-            {/* Captain reminder */}
             {selectedPlayers.length > 0 && !captain && (
               <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 mb-4 flex items-center gap-2">
                 <span className="text-yellow-400">⭐</span>
-                <p className="text-xs text-yellow-400">Escolha um capitão! Ele pontua em dobro.</p>
+                <p className="text-xs text-yellow-400">Clique no avatar para definir o capitão!</p>
               </div>
             )}
 
-            {/* Team summary */}
             {selectedPlayers.length > 0 && (
               <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4">
                 <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Times selecionados</p>
                 {Object.entries(
                   selectedPlayers.reduce((acc, id) => {
-                    const team = MOCK_PLAYERS.find((p) => p.id === id)?.team.name || "";
+                    const team = players.find((p) => p.id === id)?.team?.name || "";
                     acc[team] = (acc[team] || 0) + 1;
                     return acc;
                   }, {} as Record<string, number>)
                 ).map(([team, count]) => (
                   <div key={team} className="flex justify-between text-xs text-zinc-400 py-0.5">
                     <span>{team}</span>
-                    <span>{count}/2</span>
+                    <span className={count >= MAX_PER_TEAM ? "text-orange-400" : ""}>{count}/2</span>
                   </div>
                 ))}
               </div>
             )}
 
             <button
-              disabled={selectedPlayers.length !== MAX_PLAYERS}
+              onClick={handleConfirm}
+              disabled={!isReady || confirming}
               className="w-full bg-[#39A900] hover:bg-[#45C500] disabled:bg-zinc-800 disabled:text-zinc-600 text-black font-black py-3.5 rounded-xl transition-all text-sm"
             >
-              {selectedPlayers.length === MAX_PLAYERS
-                ? captain ? "✓ Confirmar Time" : "Escolha um capitão"
-                : `Selecione mais ${MAX_PLAYERS - selectedPlayers.length} jogador(es)`}
+              {confirming ? "Salvando time..." :
+                selectedPlayers.length !== MAX_PLAYERS ? `Selecione mais ${MAX_PLAYERS - selectedPlayers.length} jogador(es)` :
+                !captain ? "⭐ Escolha um capitão" :
+                "✓ Confirmar Time"}
             </button>
           </div>
         </div>
