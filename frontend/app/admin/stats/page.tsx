@@ -43,7 +43,7 @@ interface PlayerStatRow {
   assists: number;
   adr: number;
   rating: number;
-  headshot_percentage: number;
+  multi_kills: number;
   kast: number;
   team_won: boolean;
 }
@@ -52,6 +52,7 @@ const FLAGS: Record<string, string> = {
   BR: "🇧🇷", UA: "🇺🇦", FR: "🇫🇷", RU: "🇷🇺", DK: "🇩🇰",
   DE: "🇩🇪", PT: "🇵🇹", KZ: "🇰🇿", PL: "🇵🇱", FI: "🇫🇮",
   MN: "🇲🇳", CS: "🇷🇸", HR: "🇭🇷", EE: "🇪🇪", SE: "🇸🇪",
+  LV: "🇱🇻", RO: "🇷🇴", XK: "🏳️",
 };
 
 export default function StatsPage() {
@@ -122,7 +123,7 @@ export default function StatsPage() {
         assists: 0,
         adr: 0,
         rating: 0,
-        headshot_percentage: 0,
+        multi_kills: 0,
         kast: 0,
         team_won: false,
       }));
@@ -188,7 +189,7 @@ export default function StatsPage() {
       assists: row.assists,
       adr: row.adr,
       rating: row.rating,
-      headshot_percentage: row.headshot_percentage,
+      multi_kills: row.multi_kills,
       kast: row.kast,
       team_won: row.team_won,
     }));
@@ -217,6 +218,8 @@ export default function StatsPage() {
 
   function renderPlayerRow(row: PlayerStatRow) {
     const player = players.find(p => p.id === row.player_id);
+    const kd = row.deaths > 0 ? (row.kills / row.deaths).toFixed(2) : row.kills > 0 ? "∞" : "0.00";
+
     return (
       <tr key={row.player_id} className="border-b border-white/5 hover:bg-white/[0.02] transition-all">
         <td className="p-3">
@@ -225,33 +228,114 @@ export default function StatsPage() {
             <span className="font-bold text-sm text-white">{row.player_name}</span>
           </div>
         </td>
-        {[
-          { field: "kills", min: 0, max: 60, step: 1 },
-          { field: "deaths", min: 0, max: 60, step: 1 },
-          { field: "assists", min: 0, max: 40, step: 1 },
-          { field: "adr", min: 0, max: 200, step: 0.1 },
-          { field: "rating", min: 0, max: 3, step: 0.01 },
-          { field: "headshot_percentage", min: 0, max: 100, step: 0.1 },
-          { field: "kast", min: 0, max: 100, step: 0.1 },
-        ].map(({ field, min, max, step }) => (
-          <td key={field} className="p-2">
-            <input
-              type="number"
-              min={min}
-              max={max}
-              step={step}
-              value={row[field as keyof PlayerStatRow] as number}
-              onChange={(e) => updateStat(row.player_id, field as keyof PlayerStatRow, parseFloat(e.target.value) || 0)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
-            />
-          </td>
-        ))}
+        {/* Kills */}
+        <td className="p-2">
+          <input
+            type="number" min={0} max={60} step={1}
+            value={row.kills}
+            onChange={(e) => updateStat(row.player_id, "kills", parseInt(e.target.value) || 0)}
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
+          />
+        </td>
+        {/* Deaths */}
+        <td className="p-2">
+          <input
+            type="number" min={0} max={60} step={1}
+            value={row.deaths}
+            onChange={(e) => updateStat(row.player_id, "deaths", parseInt(e.target.value) || 0)}
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
+          />
+        </td>
+        {/* K/D calculado automaticamente */}
+        <td className="p-2 text-center">
+          <span className={`text-sm font-black ${parseFloat(kd) >= 1 ? "text-emerald-400" : "text-red-400"}`}>
+            {kd}
+          </span>
+        </td>
+        {/* Assists */}
+        <td className="p-2">
+          <input
+            type="number" min={0} max={40} step={1}
+            value={row.assists}
+            onChange={(e) => updateStat(row.player_id, "assists", parseInt(e.target.value) || 0)}
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
+          />
+        </td>
+        {/* Multi-kills */}
+        <td className="p-2">
+          <input
+            type="number" min={0} max={20} step={1}
+            value={row.multi_kills}
+            onChange={(e) => updateStat(row.player_id, "multi_kills", parseInt(e.target.value) || 0)}
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
+          />
+        </td>
+        {/* ADR */}
+        <td className="p-2">
+          <input
+            type="number" min={0} max={200} step={0.1}
+            value={row.adr}
+            onChange={(e) => updateStat(row.player_id, "adr", parseFloat(e.target.value) || 0)}
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
+          />
+        </td>
+        {/* Rating */}
+        <td className="p-2">
+          <input
+            type="number" min={0} max={3} step={0.01}
+            value={row.rating}
+            onChange={(e) => updateStat(row.player_id, "rating", parseFloat(e.target.value) || 0)}
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
+          />
+        </td>
+        {/* KAST% */}
+        <td className="p-2">
+          <input
+            type="number" min={0} max={100} step={0.1}
+            value={row.kast}
+            onChange={(e) => updateStat(row.player_id, "kast", parseFloat(e.target.value) || 0)}
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
+          />
+        </td>
+        {/* Resultado */}
         <td className="p-3 text-center">
           <span className={`text-xs font-bold px-2 py-1 rounded-full ${row.team_won ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}>
             {row.team_won ? "✓ Vitória" : "✗ Derrota"}
           </span>
         </td>
       </tr>
+    );
+  }
+
+  function renderTeamTable(teamPlayers: PlayerStatRow[], teamData: Team | undefined, isWinner: boolean) {
+    if (teamPlayers.length === 0) return null;
+    return (
+      <>
+        <div
+          className="px-4 py-2 flex items-center gap-2"
+          style={{ backgroundColor: `${teamData?.color}15`, borderBottom: `1px solid ${teamData?.color}20` }}
+        >
+          <span className="font-black text-sm" style={{ color: teamData?.color }}>{teamData?.name}</span>
+          {isWinner && <span className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">🏆 Vencedor</span>}
+        </div>
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-white/5">
+              <th className="p-3 text-left text-xs text-zinc-500 uppercase tracking-wider">Jogador</th>
+              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">Kills</th>
+              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">Deaths</th>
+              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">K/D</th>
+              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">Assists</th>
+              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">MKs</th>
+              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">ADR</th>
+              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">Rating</th>
+              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">KAST%</th>
+              <th className="p-3 text-center text-xs text-zinc-500 uppercase tracking-wider">Resultado</th>
+            </tr>
+          </thead>
+          <tbody>{teamPlayers.map(renderPlayerRow)}</tbody>
+        </table>
+      </>
     );
   }
 
@@ -269,7 +353,7 @@ export default function StatsPage() {
         </div>
       )}
 
-      {/* Seleção de torneio e fase */}
+      {/* Torneio e Fase */}
       <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 mb-6">
         <h3 className="font-black mb-4">1. Torneio e Fase</h3>
         <div className="grid grid-cols-3 gap-4">
@@ -315,7 +399,7 @@ export default function StatsPage() {
         </div>
       </div>
 
-      {/* Seleção de times */}
+      {/* Times e Vencedor */}
       <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 mb-6">
         <h3 className="font-black mb-4">2. Times e Vencedor</h3>
         <div className="grid grid-cols-3 gap-4 items-end">
@@ -341,14 +425,12 @@ export default function StatsPage() {
                   <button
                     onClick={() => setTeamWon(teamA)}
                     className={`flex-1 px-3 py-2 rounded-xl text-xs font-black transition-all ${winnerTeam === teamA ? "bg-emerald-500 text-white" : "bg-white/5 border border-white/10 text-zinc-400 hover:text-white"}`}
-                    style={winnerTeam === teamA ? {} : { borderColor: `${teamAData?.color}30` }}
                   >
                     {teamAData?.acronym}
                   </button>
                   <button
                     onClick={() => setTeamWon(teamB)}
                     className={`flex-1 px-3 py-2 rounded-xl text-xs font-black transition-all ${winnerTeam === teamB ? "bg-emerald-500 text-white" : "bg-white/5 border border-white/10 text-zinc-400 hover:text-white"}`}
-                    style={winnerTeam === teamB ? {} : { borderColor: `${teamBData?.color}30` }}
                   >
                     {teamBData?.acronym}
                   </button>
@@ -393,62 +475,13 @@ export default function StatsPage() {
         <div className="bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden mb-6">
           <div className="p-4 border-b border-white/5">
             <h3 className="font-black">3. Stats dos Jogadores</h3>
-            <p className="text-xs text-zinc-500 mt-1">Insira os dados do HLTV para cada jogador</p>
+            <p className="text-xs text-zinc-500 mt-1">K/D é calculado automaticamente conforme você digita kills e deaths</p>
           </div>
-
-          {/* Time A */}
-          {teamAPlayers.length > 0 && (
-            <>
-              <div
-                className="px-4 py-2 flex items-center gap-2"
-                style={{ backgroundColor: `${teamAData?.color}15`, borderBottom: `1px solid ${teamAData?.color}20` }}
-              >
-                <span className="font-black text-sm" style={{ color: teamAData?.color }}>{teamAData?.name}</span>
-                {winnerTeam === teamA && <span className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">🏆 Vencedor</span>}
-              </div>
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/5">
-                    <th className="p-3 text-left text-xs text-zinc-500 uppercase tracking-wider">Jogador</th>
-                    {["Kills", "Deaths", "Assists", "ADR", "Rating", "HS%", "KAST%"].map(h => (
-                      <th key={h} className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">{h}</th>
-                    ))}
-                    <th className="p-3 text-center text-xs text-zinc-500 uppercase tracking-wider">Resultado</th>
-                  </tr>
-                </thead>
-                <tbody>{teamAPlayers.map(renderPlayerRow)}</tbody>
-              </table>
-            </>
-          )}
-
-          {/* Time B */}
-          {teamBPlayers.length > 0 && (
-            <>
-              <div
-                className="px-4 py-2 flex items-center gap-2"
-                style={{ backgroundColor: `${teamBData?.color}15`, borderBottom: `1px solid ${teamBData?.color}20`, borderTop: `1px solid ${teamBData?.color}10` }}
-              >
-                <span className="font-black text-sm" style={{ color: teamBData?.color }}>{teamBData?.name}</span>
-                {winnerTeam === teamB && <span className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">🏆 Vencedor</span>}
-              </div>
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/5">
-                    <th className="p-3 text-left text-xs text-zinc-500 uppercase tracking-wider">Jogador</th>
-                    {["Kills", "Deaths", "Assists", "ADR", "Rating", "HS%", "KAST%"].map(h => (
-                      <th key={h} className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">{h}</th>
-                    ))}
-                    <th className="p-3 text-center text-xs text-zinc-500 uppercase tracking-wider">Resultado</th>
-                  </tr>
-                </thead>
-                <tbody>{teamBPlayers.map(renderPlayerRow)}</tbody>
-              </table>
-            </>
-          )}
+          {renderTeamTable(teamAPlayers, teamAData, winnerTeam === teamA)}
+          {renderTeamTable(teamBPlayers, teamBData, winnerTeam === teamB)}
         </div>
       )}
 
-      {/* Botão salvar */}
       {playerStats.length > 0 && (
         <button
           onClick={handleSave}
