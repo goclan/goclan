@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const ADMIN_EMAIL = "oficialgoclan@gmail.com";
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -27,8 +29,18 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
+  // Rota admin — só o email do admin tem acesso
+  if (request.nextUrl.pathname.startsWith("/admin")) {
+    if (!user) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+    if (user.email !== ADMIN_EMAIL) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+  }
+
   // Rotas protegidas — redireciona para login se não autenticado
-  const protectedRoutes = ["/ranking"];
+  const protectedRoutes = ["/ranking", "/torneio"];
   const isProtected = protectedRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route)
   );
