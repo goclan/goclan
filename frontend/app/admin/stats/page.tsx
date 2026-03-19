@@ -55,6 +55,26 @@ const FLAGS: Record<string, string> = {
   LV: "🇱🇻", RO: "🇷🇴", XK: "🏳️",
 };
 
+function calcKDPoints(kills: number, deaths: number): number {
+  if (deaths === 0) return kills > 0 ? 5 : 0;
+  const kd = kills / deaths;
+  if (kd >= 2.0) return 5;
+  if (kd >= 1.25) return 4;
+  if (kd >= 1.0) return 3;
+  if (kd >= 0.8) return 2;
+  return 1;
+}
+
+function calcScore(row: PlayerStatRow): number {
+  const killPts = (row.kills / 24) * 10;
+  const assistPts = (row.assists / 24) * 6;
+  const deathPts = (row.deaths / 24) * -4;
+  const kdPts = calcKDPoints(row.kills, row.deaths);
+  const mkPts = row.multi_kills * 2;
+  const winPts = row.team_won ? 2 : 0;
+  return parseFloat((killPts + assistPts + deathPts + kdPts + mkPts + winPts).toFixed(2));
+}
+
 export default function StatsPage() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
@@ -216,89 +236,89 @@ export default function StatsPage() {
   const teamAPlayers = playerStats.filter(r => players.find(p => p.id === r.player_id)?.team_id === teamA);
   const teamBPlayers = playerStats.filter(r => players.find(p => p.id === r.player_id)?.team_id === teamB);
 
+  const totalScoreA = teamAPlayers.reduce((acc, r) => acc + calcScore(r), 0);
+  const totalScoreB = teamBPlayers.reduce((acc, r) => acc + calcScore(r), 0);
+
   function renderPlayerRow(row: PlayerStatRow) {
     const player = players.find(p => p.id === row.player_id);
     const kd = row.deaths > 0 ? (row.kills / row.deaths).toFixed(2) : row.kills > 0 ? "∞" : "0.00";
+    const kdPts = calcKDPoints(row.kills, row.deaths);
+    const score = calcScore(row);
+
+    const inputClass = "w-full bg-white/5 border border-white/10 rounded-lg px-1 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50";
+    const autoClass = "w-full bg-white/[0.02] border border-white/5 rounded-lg px-1 py-1.5 text-sm text-center font-bold";
 
     return (
       <tr key={row.player_id} className="border-b border-white/5 hover:bg-white/[0.02] transition-all">
-        <td className="p-3">
-          <div className="flex items-center gap-2">
+        {/* Nome */}
+        <td className="p-3 min-w-[100px]">
+          <div className="flex items-center gap-1.5">
             <span className="text-xs">{FLAGS[player?.nationality || ""] || "🏳️"}</span>
             <span className="font-bold text-sm text-white">{row.player_name}</span>
           </div>
         </td>
         {/* Kills */}
-        <td className="p-2">
-          <input
-            type="number" min={0} max={60} step={1}
-            value={row.kills}
+        <td className="p-1.5 w-16">
+          <input type="number" min={0} max={60} step={1} value={row.kills}
             onChange={(e) => updateStat(row.player_id, "kills", parseInt(e.target.value) || 0)}
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
-          />
+            className={inputClass} />
         </td>
         {/* Deaths */}
-        <td className="p-2">
-          <input
-            type="number" min={0} max={60} step={1}
-            value={row.deaths}
+        <td className="p-1.5 w-16">
+          <input type="number" min={0} max={60} step={1} value={row.deaths}
             onChange={(e) => updateStat(row.player_id, "deaths", parseInt(e.target.value) || 0)}
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
-          />
+            className={inputClass} />
         </td>
-        {/* K/D calculado automaticamente */}
-        <td className="p-2 text-center">
-          <span className={`text-sm font-black ${parseFloat(kd) >= 1 ? "text-emerald-400" : "text-red-400"}`}>
+        {/* K/D — calculado */}
+        <td className="p-1.5 w-16">
+          <div className={`${autoClass} ${parseFloat(kd) >= 1 ? "text-emerald-400" : "text-red-400"}`}>
             {kd}
-          </span>
+          </div>
+        </td>
+        {/* Pts K/D — calculado */}
+        <td className="p-1.5 w-14">
+          <div className={`${autoClass} text-yellow-400`}>
+            +{kdPts}
+          </div>
         </td>
         {/* Assists */}
-        <td className="p-2">
-          <input
-            type="number" min={0} max={40} step={1}
-            value={row.assists}
+        <td className="p-1.5 w-16">
+          <input type="number" min={0} max={40} step={1} value={row.assists}
             onChange={(e) => updateStat(row.player_id, "assists", parseInt(e.target.value) || 0)}
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
-          />
+            className={inputClass} />
         </td>
         {/* Multi-kills */}
-        <td className="p-2">
-          <input
-            type="number" min={0} max={20} step={1}
-            value={row.multi_kills}
+        <td className="p-1.5 w-14">
+          <input type="number" min={0} max={20} step={1} value={row.multi_kills}
             onChange={(e) => updateStat(row.player_id, "multi_kills", parseInt(e.target.value) || 0)}
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
-          />
+            className={inputClass} />
         </td>
         {/* ADR */}
-        <td className="p-2">
-          <input
-            type="number" min={0} max={200} step={0.1}
-            value={row.adr}
+        <td className="p-1.5 w-20">
+          <input type="number" min={0} max={200} step={0.1} value={row.adr}
             onChange={(e) => updateStat(row.player_id, "adr", parseFloat(e.target.value) || 0)}
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
-          />
+            className={inputClass} />
         </td>
         {/* Rating */}
-        <td className="p-2">
-          <input
-            type="number" min={0} max={3} step={0.01}
-            value={row.rating}
+        <td className="p-1.5 w-16">
+          <input type="number" min={0} max={3} step={0.01} value={row.rating}
             onChange={(e) => updateStat(row.player_id, "rating", parseFloat(e.target.value) || 0)}
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
-          />
+            className={inputClass} />
         </td>
         {/* KAST% */}
-        <td className="p-2">
-          <input
-            type="number" min={0} max={100} step={0.1}
-            value={row.kast}
+        <td className="p-1.5 w-16">
+          <input type="number" min={0} max={100} step={0.1} value={row.kast}
             onChange={(e) => updateStat(row.player_id, "kast", parseFloat(e.target.value) || 0)}
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-[#39A900]/50"
-          />
+            className={inputClass} />
+        </td>
+        {/* Pts Jogador — calculado */}
+        <td className="p-1.5 w-20">
+          <div className={`${autoClass} text-[#39A900] text-base`}>
+            {score}
+          </div>
         </td>
         {/* Resultado */}
-        <td className="p-3 text-center">
+        <td className="p-3 text-center w-24">
           <span className={`text-xs font-bold px-2 py-1 rounded-full ${row.team_won ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}>
             {row.team_won ? "✓ Vitória" : "✗ Derrota"}
           </span>
@@ -307,34 +327,44 @@ export default function StatsPage() {
     );
   }
 
-  function renderTeamTable(teamPlayers: PlayerStatRow[], teamData: Team | undefined, isWinner: boolean) {
+  function renderTeamTable(teamPlayers: PlayerStatRow[], teamData: Team | undefined, isWinner: boolean, totalScore: number) {
     if (teamPlayers.length === 0) return null;
     return (
       <>
         <div
-          className="px-4 py-2 flex items-center gap-2"
+          className="px-4 py-2 flex items-center justify-between"
           style={{ backgroundColor: `${teamData?.color}15`, borderBottom: `1px solid ${teamData?.color}20` }}
         >
-          <span className="font-black text-sm" style={{ color: teamData?.color }}>{teamData?.name}</span>
-          {isWinner && <span className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">🏆 Vencedor</span>}
+          <div className="flex items-center gap-2">
+            <span className="font-black text-sm" style={{ color: teamData?.color }}>{teamData?.name}</span>
+            {isWinner && <span className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">🏆 Vencedor</span>}
+          </div>
+          <div className="text-right">
+            <span className="text-xs text-zinc-500 mr-2">Total do time:</span>
+            <span className="font-black text-[#39A900]">{totalScore.toFixed(2)} pts</span>
+          </div>
         </div>
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-white/5">
-              <th className="p-3 text-left text-xs text-zinc-500 uppercase tracking-wider">Jogador</th>
-              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">Kills</th>
-              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">Deaths</th>
-              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">K/D</th>
-              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">Assists</th>
-              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">MKs</th>
-              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">ADR</th>
-              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">Rating</th>
-              <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">KAST%</th>
-              <th className="p-3 text-center text-xs text-zinc-500 uppercase tracking-wider">Resultado</th>
-            </tr>
-          </thead>
-          <tbody>{teamPlayers.map(renderPlayerRow)}</tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px]">
+            <thead>
+              <tr className="border-b border-white/5">
+                <th className="p-3 text-left text-xs text-zinc-500 uppercase tracking-wider">Jogador</th>
+                <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">Kills</th>
+                <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">Deaths</th>
+                <th className="p-2 text-center text-xs text-yellow-500/70 uppercase tracking-wider">K/D</th>
+                <th className="p-2 text-center text-xs text-yellow-500/70 uppercase tracking-wider">Pts K/D</th>
+                <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">Assists</th>
+                <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">MKs</th>
+                <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">ADR</th>
+                <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">Rating</th>
+                <th className="p-2 text-center text-xs text-zinc-500 uppercase tracking-wider">KAST%</th>
+                <th className="p-2 text-center text-xs text-[#39A900]/80 uppercase tracking-wider">Pts Total</th>
+                <th className="p-3 text-center text-xs text-zinc-500 uppercase tracking-wider">Resultado</th>
+              </tr>
+            </thead>
+            <tbody>{teamPlayers.map(renderPlayerRow)}</tbody>
+          </table>
+        </div>
       </>
     );
   }
@@ -343,12 +373,12 @@ export default function StatsPage() {
     <div className="p-8">
       <div className="mb-8">
         <h2 className="text-2xl font-black">Inserir Stats Pós-Partida</h2>
-        <p className="text-zinc-500 text-sm mt-1">Insira os stats do HLTV após cada partida para calcular a pontuação dos lineups</p>
+        <p className="text-zinc-500 text-sm mt-1">K/D, Pts K/D e Pts Total são calculados automaticamente em tempo real</p>
       </div>
 
       {saved && (
         <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 mb-6 flex items-center gap-3">
-          <span className="text-emerald-400">✓</span>
+          <span className="text-emerald-400 text-xl">✓</span>
           <p className="text-sm text-emerald-400 font-bold">Partida e stats salvos com sucesso!</p>
         </div>
       )}
@@ -359,42 +389,27 @@ export default function StatsPage() {
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="text-xs text-zinc-500 uppercase tracking-wider mb-1 block">Torneio *</label>
-            <select
-              value={selectedTournament}
-              onChange={(e) => { setSelectedTournament(e.target.value); setSelectedPhase(""); }}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#39A900]/50"
-            >
+            <select value={selectedTournament} onChange={(e) => { setSelectedTournament(e.target.value); setSelectedPhase(""); }}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#39A900]/50">
               <option value="" className="bg-[#090b0f]">Selecione o torneio</option>
-              {tournaments.map(t => (
-                <option key={t.id} value={t.id} className="bg-[#090b0f]">{t.name}</option>
-              ))}
+              {tournaments.map(t => <option key={t.id} value={t.id} className="bg-[#090b0f]">{t.name}</option>)}
             </select>
           </div>
           <div>
             <label className="text-xs text-zinc-500 uppercase tracking-wider mb-1 block">Fase *</label>
-            <select
-              value={selectedPhase}
-              onChange={(e) => setSelectedPhase(e.target.value)}
-              disabled={!selectedTournament}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#39A900]/50 disabled:opacity-50"
-            >
+            <select value={selectedPhase} onChange={(e) => setSelectedPhase(e.target.value)} disabled={!selectedTournament}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#39A900]/50 disabled:opacity-50">
               <option value="" className="bg-[#090b0f]">Selecione a fase</option>
-              {phases.map(p => (
-                <option key={p.id} value={p.id} className="bg-[#090b0f]">{p.name}</option>
-              ))}
+              {phases.map(p => <option key={p.id} value={p.id} className="bg-[#090b0f]">{p.name}</option>)}
             </select>
             {selectedTournament && phases.length === 0 && (
-              <p className="text-xs text-orange-400 mt-1">⚠️ Nenhuma fase cadastrada para este torneio.</p>
+              <p className="text-xs text-orange-400 mt-1">⚠️ Nenhuma fase cadastrada.</p>
             )}
           </div>
           <div>
             <label className="text-xs text-zinc-500 uppercase tracking-wider mb-1 block">Data da partida</label>
-            <input
-              type="datetime-local"
-              value={matchDate}
-              onChange={(e) => setMatchDate(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#39A900]/50"
-            />
+            <input type="datetime-local" value={matchDate} onChange={(e) => setMatchDate(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#39A900]/50" />
           </div>
         </div>
       </div>
@@ -405,15 +420,10 @@ export default function StatsPage() {
         <div className="grid grid-cols-3 gap-4 items-end">
           <div>
             <label className="text-xs text-zinc-500 uppercase tracking-wider mb-1 block">Time A *</label>
-            <select
-              value={teamA}
-              onChange={(e) => { setTeamA(e.target.value); setWinnerTeam(""); }}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#39A900]/50"
-            >
+            <select value={teamA} onChange={(e) => { setTeamA(e.target.value); setWinnerTeam(""); }}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#39A900]/50">
               <option value="" className="bg-[#090b0f]">Selecione o time</option>
-              {teams.filter(t => t.id !== teamB).map(t => (
-                <option key={t.id} value={t.id} className="bg-[#090b0f]">{t.name}</option>
-              ))}
+              {teams.filter(t => t.id !== teamB).map(t => <option key={t.id} value={t.id} className="bg-[#090b0f]">{t.name}</option>)}
             </select>
           </div>
           <div className="text-center">
@@ -422,16 +432,12 @@ export default function StatsPage() {
               <div className="flex flex-col gap-2">
                 <p className="text-xs text-zinc-500 uppercase tracking-wider">Vencedor *</p>
                 <div className="flex gap-2 justify-center">
-                  <button
-                    onClick={() => setTeamWon(teamA)}
-                    className={`flex-1 px-3 py-2 rounded-xl text-xs font-black transition-all ${winnerTeam === teamA ? "bg-emerald-500 text-white" : "bg-white/5 border border-white/10 text-zinc-400 hover:text-white"}`}
-                  >
+                  <button onClick={() => setTeamWon(teamA)}
+                    className={`flex-1 px-3 py-2 rounded-xl text-xs font-black transition-all ${winnerTeam === teamA ? "bg-emerald-500 text-white" : "bg-white/5 border border-white/10 text-zinc-400 hover:text-white"}`}>
                     {teamAData?.acronym}
                   </button>
-                  <button
-                    onClick={() => setTeamWon(teamB)}
-                    className={`flex-1 px-3 py-2 rounded-xl text-xs font-black transition-all ${winnerTeam === teamB ? "bg-emerald-500 text-white" : "bg-white/5 border border-white/10 text-zinc-400 hover:text-white"}`}
-                  >
+                  <button onClick={() => setTeamWon(teamB)}
+                    className={`flex-1 px-3 py-2 rounded-xl text-xs font-black transition-all ${winnerTeam === teamB ? "bg-emerald-500 text-white" : "bg-white/5 border border-white/10 text-zinc-400 hover:text-white"}`}>
                     {teamBData?.acronym}
                   </button>
                 </div>
@@ -440,28 +446,20 @@ export default function StatsPage() {
           </div>
           <div>
             <label className="text-xs text-zinc-500 uppercase tracking-wider mb-1 block">Time B *</label>
-            <select
-              value={teamB}
-              onChange={(e) => { setTeamB(e.target.value); setWinnerTeam(""); }}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#39A900]/50"
-            >
+            <select value={teamB} onChange={(e) => { setTeamB(e.target.value); setWinnerTeam(""); }}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#39A900]/50">
               <option value="" className="bg-[#090b0f]">Selecione o time</option>
-              {teams.filter(t => t.id !== teamA).map(t => (
-                <option key={t.id} value={t.id} className="bg-[#090b0f]">{t.name}</option>
-              ))}
+              {teams.filter(t => t.id !== teamA).map(t => <option key={t.id} value={t.id} className="bg-[#090b0f]">{t.name}</option>)}
             </select>
           </div>
         </div>
         {selectedPhase && phases.find(p => p.id === selectedPhase)?.phase_type === "swiss" && (
           <div className="mt-4">
-            <label className="text-xs text-zinc-500 uppercase tracking-wider mb-1 block">Rodada do Swiss</label>
+            <label className="text-xs text-zinc-500 uppercase tracking-wider mb-2 block">Rodada do Swiss</label>
             <div className="flex gap-2">
               {[1, 2, 3, 4, 5].map(r => (
-                <button
-                  key={r}
-                  onClick={() => setSwissRound(r)}
-                  className={`w-10 h-10 rounded-xl text-sm font-black transition-all ${swissRound === r ? "bg-[#39A900] text-black" : "bg-white/5 border border-white/10 text-zinc-500 hover:text-white"}`}
-                >
+                <button key={r} onClick={() => setSwissRound(r)}
+                  className={`w-10 h-10 rounded-xl text-sm font-black transition-all ${swissRound === r ? "bg-[#39A900] text-black" : "bg-white/5 border border-white/10 text-zinc-500 hover:text-white"}`}>
                   {r}
                 </button>
               ))}
@@ -470,24 +468,39 @@ export default function StatsPage() {
         )}
       </div>
 
+      {/* Legenda */}
+      {playerStats.length > 0 && (
+        <div className="flex items-center gap-4 mb-3 px-1">
+          <span className="text-xs text-zinc-500">Campos editáveis → fundo escuro</span>
+          <span className="text-xs text-yellow-500/70">Campos amarelos → calculados automaticamente</span>
+          <span className="text-xs text-[#39A900]/80">Pts Total → pontuação final do jogador</span>
+        </div>
+      )}
+
       {/* Tabela de stats */}
       {playerStats.length > 0 && (
         <div className="bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden mb-6">
-          <div className="p-4 border-b border-white/5">
-            <h3 className="font-black">3. Stats dos Jogadores</h3>
-            <p className="text-xs text-zinc-500 mt-1">K/D é calculado automaticamente conforme você digita kills e deaths</p>
+          <div className="p-4 border-b border-white/5 flex items-center justify-between">
+            <div>
+              <h3 className="font-black">3. Stats dos Jogadores</h3>
+              <p className="text-xs text-zinc-500 mt-0.5">Fórmula: (Kills/24×10) + (Assists/24×6) - (Deaths/24×4) + Pts K/D + (MKs×2) + Vitória(+2)</p>
+            </div>
+            {winnerTeam && (
+              <div className="text-right">
+                <p className="text-xs text-zinc-500">Pontuação total da partida</p>
+                <p className="font-black text-white">{(totalScoreA + totalScoreB).toFixed(2)} pts</p>
+              </div>
+            )}
           </div>
-          {renderTeamTable(teamAPlayers, teamAData, winnerTeam === teamA)}
-          {renderTeamTable(teamBPlayers, teamBData, winnerTeam === teamB)}
+          {renderTeamTable(teamAPlayers, teamAData, winnerTeam === teamA, totalScoreA)}
+          {renderTeamTable(teamBPlayers, teamBData, winnerTeam === teamB, totalScoreB)}
         </div>
       )}
 
       {playerStats.length > 0 && (
-        <button
-          onClick={handleSave}
+        <button onClick={handleSave}
           disabled={saving || !selectedTournament || !selectedPhase || !teamA || !teamB || !winnerTeam}
-          className="w-full bg-[#39A900] hover:bg-[#45C500] disabled:bg-zinc-700 disabled:text-zinc-500 text-black font-black py-4 rounded-2xl transition-all text-lg"
-        >
+          className="w-full bg-[#39A900] hover:bg-[#45C500] disabled:bg-zinc-700 disabled:text-zinc-500 text-black font-black py-4 rounded-2xl transition-all text-lg">
           {saving ? "Salvando..." : "✓ Salvar Partida e Stats"}
         </button>
       )}
