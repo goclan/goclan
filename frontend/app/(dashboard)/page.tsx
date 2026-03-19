@@ -96,6 +96,7 @@ export default async function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {tournaments.map((tournament: any) => {
               const status = statusConfig[tournament.status as keyof typeof statusConfig] || statusConfig["FINALIZADO"];
+              const encodedName = encodeURIComponent(tournament.name);
               return (
                 <div key={tournament.id} className="group relative bg-white/[0.02] border border-white/5 rounded-2xl p-6 hover:border-white/10 hover:bg-white/[0.04] transition-all duration-300 overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-0 group-hover:opacity-10 transition-opacity duration-500 blur-3xl" style={{ backgroundColor: status.color }} />
@@ -138,13 +139,13 @@ export default async function Dashboard() {
                       {formatDate(tournament.begin_at)} → {formatDate(tournament.end_at)}
                     </div>
                     {tournament.status === "ABERTO" && (
-                      <Link href={`/torneio/${tournament.id}`} className="flex items-center gap-2 bg-[#39A900] hover:bg-[#45C500] text-black text-sm font-black px-4 py-2 rounded-xl transition-colors">
+                      <Link href={`/torneio?tournament=${tournament.id}&name=${encodedName}`} className="flex items-center gap-2 bg-[#39A900] hover:bg-[#45C500] text-black text-sm font-black px-4 py-2 rounded-xl transition-colors">
                         Montar Time
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
                       </Link>
                     )}
                     {tournament.status === "EM ANDAMENTO" && (
-                      <Link href={`/torneio/${tournament.id}`} className="flex items-center gap-2 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-400 text-sm font-black px-4 py-2 rounded-xl transition-colors">
+                      <Link href={`/torneio?tournament=${tournament.id}&name=${encodedName}`} className="flex items-center gap-2 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-400 text-sm font-black px-4 py-2 rounded-xl transition-colors">
                         Ver Ao Vivo
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
                       </Link>
