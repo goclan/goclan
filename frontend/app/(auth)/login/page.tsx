@@ -1,16 +1,65 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import HoloCard from "@/components/card/HoloCard";
+
+interface Player {
+  id: string;
+  name: string;
+  first_name: string;
+  last_name: string;
+  nationality: string;
+  role: string;
+  price: number;
+  image_url: string | null;
+  teams: {
+    id: string;
+    name: string;
+    acronym: string;
+    color: string;
+  };
+  player_stats: {
+    rating: number;
+    kd_ratio: number;
+    adr: number;
+    headshot_percentage: number;
+    kast: number;
+  }[];
+}
+
+const FLAGS: Record<string, string> = {
+  BR: "🇧🇷", UA: "🇺🇦", FR: "🇫🇷", RU: "🇷🇺", DK: "🇩🇰",
+  DE: "🇩🇪", PT: "🇵🇹", KZ: "🇰🇿", PL: "🇵🇱", FI: "🇫🇮",
+  MN: "🇲🇳", CS: "🇷🇸", HR: "🇭🇷", EE: "🇪🇪", SE: "🇸🇪",
+  LV: "🇱🇻", RO: "🇷🇴", XK: "🏳️", IL: "🇮🇱", ES: "🇪🇸",
+  GB: "🇬🇧", CA: "🇨🇦", CZ: "🇨🇿", US: "🇺🇸",
+};
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [randomPlayers, setRandomPlayers] = useState<Player[]>([]);
   const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    async function fetchRandomPlayers() {
+      const { data } = await supabase
+        .from("players")
+        .select("*, teams(id, name, acronym, color), player_stats(rating, kd_ratio, adr, headshot_percentage, kast)")
+        .eq("is_active", true);
+
+      if (data && data.length >= 3) {
+        const shuffled = [...data].sort(() => Math.random() - 0.5);
+        setRandomPlayers(shuffled.slice(0, 3) as any);
+      }
+    }
+    fetchRandomPlayers();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +87,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-[#090b0f] text-white flex">
+      {/* Lado esquerdo — cards reais */}
       <div className="hidden lg:flex flex-1 relative overflow-hidden items-center justify-center">
         <div className="absolute inset-0 bg-gradient-to-br from-[#39A900]/10 via-transparent to-transparent" />
         <div className="absolute inset-0"
@@ -51,7 +101,7 @@ export default function Login() {
             backgroundSize: `60px 60px`,
           }}
         />
-        <div className="relative z-10 text-center px-12">
+        <div className="relative z-10 text-center px-12 w-full">
           <div className="flex items-center justify-center gap-3 mb-12">
             <div className="w-12 h-12 rounded-xl bg-[#39A900] flex items-center justify-center">
               <span className="text-black font-black text-xl">G</span>
@@ -64,27 +114,77 @@ export default function Login() {
             Monte seu time.<br />
             <span className="text-[#39A900]">Compete de verdade.</span>
           </h2>
-          <p className="text-zinc-500 text-lg max-w-sm mx-auto">
+          <p className="text-zinc-500 text-lg max-w-sm mx-auto mb-12">
             O único fantasy CS2 do Brasil com cards holográficos e token PULSR.
           </p>
-          <div className="flex justify-center gap-4 mt-12">
-            {["KSCERATO", "FalleN", "chelo"].map((player, i) => (
-              <div
-                key={player}
-                className="w-24 h-32 rounded-xl border border-white/10 bg-white/5 flex flex-col items-center justify-center gap-2 hover:border-[#39A900]/50 transition-all duration-300 hover:-translate-y-2"
-                style={{ animationDelay: `${i * 0.2}s` }}
-              >
-                <div className="w-10 h-10 rounded-full bg-[#39A900]/20 border border-[#39A900]/30 flex items-center justify-center">
-                  <span className="text-[#39A900] text-xs font-black">{player[0]}</span>
+
+          {/* Cards reais */}
+          <div className="flex justify-center gap-6 px-8">
+            {randomPlayers.length === 3 ? randomPlayers.map((player, i) => {
+              const stats = player.player_stats?.[0];
+              return (
+                <div
+                  key={player.id}
+                  className="w-36 transition-all duration-500"
+                  style={{
+                    transform: i === 1 ? "translateY(-16px)" : "translateY(0px)",
+                    opacity: 0.95,
+                  }}
+                >
+                  <HoloCard
+                    player={{
+                      id: player.id,
+                      name: player.name,
+                      first_name: player.first_name,
+                      last_name: player.last_name,
+                      nationality: player.nationality,
+                      role: player.role,
+                      price: player.price,
+                      image_url: player.image_url,
+                      country: FLAGS[player.nationality] || "🏳️",
+                      rating: stats?.rating || 1.0,
+                      kd: stats?.kd_ratio || 1.0,
+                      adr: stats?.adr || 70,
+                      color: player.teams?.color || "#39A900",
+                      team: {
+                        id: player.teams?.id || "",
+                        name: player.teams?.name || "",
+                        acronym: player.teams?.acronym || "",
+                        image_url: null,
+                        color: player.teams?.color || "#39A900",
+                      },
+                      stats: {
+                        headshot_percentage: stats?.headshot_percentage || 45,
+                        kast: stats?.kast || 70,
+                      },
+                    }}
+                    isSelected={false}
+                    isCaptain={false}
+                    isDisabled={false}
+                    readOnly={true}
+                    onClick={() => {}}
+                    onCaptainClick={() => {}}
+                  />
                 </div>
-                <span className="text-xs font-bold text-zinc-400">{player}</span>
-                <span className="text-[10px] text-[#39A900] font-bold">FURIA</span>
-              </div>
-            ))}
+              );
+            }) : (
+              // Placeholder enquanto carrega
+              [0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="w-36 rounded-2xl bg-white/5 border border-white/10 animate-pulse"
+                  style={{
+                    aspectRatio: "3/4",
+                    transform: i === 1 ? "translateY(-16px)" : "translateY(0px)",
+                  }}
+                />
+              ))
+            )}
           </div>
         </div>
       </div>
 
+      {/* Lado direito — formulário */}
       <div className="flex-1 lg:max-w-md flex items-center justify-center px-8 py-12">
         <div className="w-full max-w-sm">
           <div className="flex items-center gap-3 mb-10 lg:hidden">
