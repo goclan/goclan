@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import HoloCard from "@/components/card/HoloCard";
 import { createClient } from "@/lib/supabase/client";
@@ -60,7 +60,7 @@ interface Match {
   team_b: { id: string; name: string; acronym: string; color: string };
 }
 
-export default function MontarTime() {
+function MontarTimeInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const tournamentId = searchParams.get("tournament") || "";
@@ -79,7 +79,6 @@ export default function MontarTime() {
   const [search, setSearch] = useState("");
   const [confirming, setConfirming] = useState(false);
 
-  // Modal state
   const [showModal, setShowModal] = useState(false);
   const [modalStep, setModalStep] = useState(1);
   const [mvpPick, setMvpPick] = useState<string | null>(null);
@@ -114,14 +113,11 @@ export default function MontarTime() {
 
         if (phaseData) {
           setActivePhaseId(phaseData.id);
-
-          // Busca partidas da fase ativa
           const { data: matchesData } = await supabase
             .from("matches")
             .select("*, team_a:team_a_id(id, name, acronym, color), team_b:team_b_id(id, name, acronym, color)")
             .eq("phase_id", phaseData.id)
             .order("status");
-
           if (matchesData) setMatches(matchesData as any);
         }
       }
@@ -215,19 +211,19 @@ export default function MontarTime() {
       }
 
       const selectedData = selectedPlayers.map((id) => {
-  const p = players.find((p) => p.id === id);
-  const stats = getPlayerStats(p!);
-  return {
-    id: p?.id,
-    name: p?.name,
-    nationality: p?.nationality,
-    role: p?.role,
-    price: p?.price,
-    image_url: p?.image_url || null,
-    team: p?.teams,
-    stats,
-  };
-});
+        const p = players.find((p) => p.id === id);
+        const stats = getPlayerStats(p!);
+        return {
+          id: p?.id,
+          name: p?.name,
+          nationality: p?.nationality,
+          role: p?.role,
+          price: p?.price,
+          image_url: p?.image_url || null,
+          team: p?.teams,
+          stats,
+        };
+      });
 
       const { data, error } = await supabase
         .from("lineups")
@@ -248,7 +244,6 @@ export default function MontarTime() {
         .single();
 
       if (error) throw error;
-
       router.push(`/torneio/${tournamentId}/resultado?lineup=${data.id}`);
     } catch (e) {
       console.error("Erro ao confirmar time:", e);
@@ -291,12 +286,9 @@ export default function MontarTime() {
   return (
     <div className="min-h-screen bg-[#090b0f] text-white">
 
-      {/* ══════════ MODAL ══════════ */}
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="w-full max-w-2xl bg-[#0d1117] border border-white/10 rounded-2xl overflow-hidden">
-
-            {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
               <div className="flex items-center gap-3">
                 {[
@@ -319,18 +311,10 @@ export default function MontarTime() {
                   </div>
                 ))}
               </div>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-zinc-500 hover:text-white transition-colors text-lg"
-              >
-                ✕
-              </button>
+              <button onClick={() => setShowModal(false)} className="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
             </div>
 
-            {/* Modal Body */}
             <div className="px-6 py-5 max-h-[60vh] overflow-y-auto">
-
-              {/* ETAPA 1 — MVP */}
               {modalStep === 1 && (
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -344,9 +328,7 @@ export default function MontarTime() {
                         key={player.id}
                         onClick={() => setMvpPick(mvpPick === player.id ? null : player.id)}
                         className={`flex items-center gap-2 p-3 rounded-xl border transition-all text-left ${
-                          mvpPick === player.id
-                            ? "bg-yellow-500/10 border-yellow-500/40 text-white"
-                            : "bg-white/5 border-white/10 text-zinc-400 hover:border-white/20 hover:text-white"
+                          mvpPick === player.id ? "bg-yellow-500/10 border-yellow-500/40 text-white" : "bg-white/5 border-white/10 text-zinc-400 hover:border-white/20 hover:text-white"
                         }`}
                       >
                         <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0 bg-white/5">
@@ -366,7 +348,6 @@ export default function MontarTime() {
                 </div>
               )}
 
-              {/* ETAPA 2 — CONE */}
               {modalStep === 2 && (
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -382,9 +363,8 @@ export default function MontarTime() {
                         disabled={player.id === mvpPick}
                         className={`flex items-center gap-2 p-3 rounded-xl border transition-all text-left ${
                           player.id === mvpPick ? "opacity-30 cursor-not-allowed bg-white/5 border-white/5" :
-                          conePick === player.id
-                            ? "bg-red-500/10 border-red-500/40 text-white"
-                            : "bg-white/5 border-white/10 text-zinc-400 hover:border-white/20 hover:text-white"
+                          conePick === player.id ? "bg-red-500/10 border-red-500/40 text-white" :
+                          "bg-white/5 border-white/10 text-zinc-400 hover:border-white/20 hover:text-white"
                         }`}
                       >
                         <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0 bg-white/5">
@@ -404,7 +384,6 @@ export default function MontarTime() {
                 </div>
               )}
 
-              {/* ETAPA 3 — CHAVEAMENTO */}
               {modalStep === 3 && (
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -412,7 +391,6 @@ export default function MontarTime() {
                     <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full font-bold">PRO</span>
                   </div>
                   <p className="text-zinc-500 text-sm mb-5">Quem vai vencer cada confronto? Escolha o vencedor e o placar.</p>
-
                   <div className="flex flex-col gap-4">
                     {matches.map((match) => {
                       const pick = bracket[match.id];
@@ -422,38 +400,24 @@ export default function MontarTime() {
                             <p className="text-xs text-zinc-500 mb-3 text-center">Partida já finalizada</p>
                           )}
                           <div className="flex items-center gap-3">
-                            {/* Team A */}
                             <button
                               onClick={() => setBracket({ ...bracket, [match.id]: { winner: match.team_a_id, score: pick?.winner === match.team_a_id ? (pick.score || "2-0") : "2-0" } })}
-                              className={`flex-1 flex items-center gap-2 p-3 rounded-xl border transition-all ${
-                                pick?.winner === match.team_a_id
-                                  ? "bg-[#39A900]/10 border-[#39A900]/40"
-                                  : "bg-white/5 border-white/10 hover:border-white/20"
-                              }`}
+                              className={`flex-1 flex items-center gap-2 p-3 rounded-xl border transition-all ${pick?.winner === match.team_a_id ? "bg-[#39A900]/10 border-[#39A900]/40" : "bg-white/5 border-white/10 hover:border-white/20"}`}
                             >
                               <div className="w-6 h-6 rounded-lg shrink-0" style={{ backgroundColor: `${match.team_a?.color}30`, border: `1px solid ${match.team_a?.color}40` }} />
                               <span className="text-sm font-black truncate">{match.team_a?.acronym}</span>
                               {pick?.winner === match.team_a_id && <span className="ml-auto text-[#39A900] text-xs">✓</span>}
                             </button>
-
                             <span className="text-zinc-600 text-xs font-bold shrink-0">VS</span>
-
-                            {/* Team B */}
                             <button
                               onClick={() => setBracket({ ...bracket, [match.id]: { winner: match.team_b_id, score: pick?.winner === match.team_b_id ? (pick.score || "2-0") : "2-0" } })}
-                              className={`flex-1 flex items-center gap-2 p-3 rounded-xl border transition-all ${
-                                pick?.winner === match.team_b_id
-                                  ? "bg-[#39A900]/10 border-[#39A900]/40"
-                                  : "bg-white/5 border-white/10 hover:border-white/20"
-                              }`}
+                              className={`flex-1 flex items-center gap-2 p-3 rounded-xl border transition-all ${pick?.winner === match.team_b_id ? "bg-[#39A900]/10 border-[#39A900]/40" : "bg-white/5 border-white/10 hover:border-white/20"}`}
                             >
                               <div className="w-6 h-6 rounded-lg shrink-0" style={{ backgroundColor: `${match.team_b?.color}30`, border: `1px solid ${match.team_b?.color}40` }} />
                               <span className="text-sm font-black truncate">{match.team_b?.acronym}</span>
                               {pick?.winner === match.team_b_id && <span className="ml-auto text-[#39A900] text-xs">✓</span>}
                             </button>
                           </div>
-
-                          {/* Placar */}
                           {pick?.winner && (
                             <div className="flex items-center gap-2 mt-3">
                               <span className="text-xs text-zinc-500">Placar:</span>
@@ -461,11 +425,7 @@ export default function MontarTime() {
                                 <button
                                   key={score}
                                   onClick={() => setBracket({ ...bracket, [match.id]: { ...pick, score } })}
-                                  className={`px-3 py-1 rounded-lg text-xs font-black transition-all ${
-                                    pick.score === score
-                                      ? "bg-[#39A900] text-black"
-                                      : "bg-white/5 border border-white/10 text-zinc-400 hover:text-white"
-                                  }`}
+                                  className={`px-3 py-1 rounded-lg text-xs font-black transition-all ${pick.score === score ? "bg-[#39A900] text-black" : "bg-white/5 border border-white/10 text-zinc-400 hover:text-white"}`}
                                 >
                                   {score}
                                 </button>
@@ -480,7 +440,6 @@ export default function MontarTime() {
               )}
             </div>
 
-            {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-white/5 flex items-center justify-between">
               <button
                 onClick={() => modalStep > 1 ? setModalStep(modalStep - 1) : setShowModal(false)}
@@ -488,24 +447,14 @@ export default function MontarTime() {
               >
                 ← {modalStep > 1 ? "Voltar" : "Cancelar"}
               </button>
-
               <div className="flex items-center gap-3">
                 {modalStep < 3 && (
-                  <button
-                    onClick={() => setModalStep(modalStep + 1)}
-                    className="text-zinc-500 hover:text-zinc-300 text-xs transition-colors"
-                  >
+                  <button onClick={() => setModalStep(modalStep + 1)} className="text-zinc-500 hover:text-zinc-300 text-xs transition-colors">
                     Pular →
                   </button>
                 )}
                 <button
-                  onClick={() => {
-                    if (modalStep < 3) {
-                      setModalStep(modalStep + 1);
-                    } else {
-                      handleSaveLineup();
-                    }
-                  }}
+                  onClick={() => { if (modalStep < 3) { setModalStep(modalStep + 1); } else { handleSaveLineup(); } }}
                   disabled={confirming}
                   className="bg-[#39A900] hover:bg-[#45C500] disabled:bg-zinc-700 disabled:text-zinc-500 text-black font-black px-6 py-2.5 rounded-xl transition-all text-sm"
                 >
@@ -517,7 +466,6 @@ export default function MontarTime() {
         </div>
       )}
 
-      {/* ══════════ HEADER ══════════ */}
       <header className="border-b border-white/5 backdrop-blur-sm sticky top-0 z-50 bg-[#090b0f]/90">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -536,9 +484,7 @@ export default function MontarTime() {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <p className="text-xs text-zinc-500 uppercase tracking-wider">Saldo restante</p>
-              <p className={`font-black text-lg ${remaining < 100 ? "text-red-400" : "text-[#39A900]"}`}>
-                {remaining} GS$
-              </p>
+              <p className={`font-black text-lg ${remaining < 100 ? "text-red-400" : "text-[#39A900]"}`}>{remaining} GS$</p>
             </div>
             <button
               onClick={handleConfirm}
@@ -595,9 +541,7 @@ export default function MontarTime() {
                 <button
                   key={t.key}
                   onClick={() => setFilterTier(t.key)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                    filterTier === t.key ? "text-black border-transparent" : "bg-white/5 border-white/10 text-zinc-500 hover:text-white"
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${filterTier === t.key ? "text-black border-transparent" : "bg-white/5 border-white/10 text-zinc-500 hover:text-white"}`}
                   style={filterTier === t.key ? { backgroundColor: t.color, borderColor: t.color } : {}}
                 >
                   {t.label}
@@ -611,9 +555,7 @@ export default function MontarTime() {
                 <button
                   key={t}
                   onClick={() => setFilterTeam(t)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    filterTeam === t ? "bg-[#39A900] text-black" : "bg-white/5 border border-white/10 text-zinc-500 hover:text-white"
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterTeam === t ? "bg-[#39A900] text-black" : "bg-white/5 border border-white/10 text-zinc-500 hover:text-white"}`}
                 >
                   {t}
                 </button>
@@ -681,17 +623,12 @@ export default function MontarTime() {
               <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${(spent / BUDGET) * 100}%`,
-                    backgroundColor: remaining < 100 ? "#ef4444" : "#39A900",
-                  }}
+                  style={{ width: `${(spent / BUDGET) * 100}%`, backgroundColor: remaining < 100 ? "#ef4444" : "#39A900" }}
                 />
               </div>
               <div className="flex justify-between mt-2">
                 <span className="text-xs text-zinc-600">Gasto</span>
-                <span className={`text-xs font-bold ${remaining < 100 ? "text-red-400" : "text-[#39A900]"}`}>
-                  {remaining} GS$ restantes
-                </span>
+                <span className={`text-xs font-bold ${remaining < 100 ? "text-red-400" : "text-[#39A900]"}`}>{remaining} GS$ restantes</span>
               </div>
             </div>
 
@@ -704,9 +641,7 @@ export default function MontarTime() {
                 return (
                   <div
                     key={i}
-                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                      player ? "bg-white/[0.03] border-white/10" : "bg-white/[0.01] border-white/5 border-dashed"
-                    }`}
+                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${player ? "bg-white/[0.03] border-white/10" : "bg-white/[0.01] border-white/5 border-dashed"}`}
                   >
                     {player ? (
                       <>
@@ -719,25 +654,19 @@ export default function MontarTime() {
                           }}
                           onClick={() => setCaptain(captain === player.id ? null : player.id)}
                         >
-                          {player.image_url ? (
-                            <img src={player.image_url} alt={player.name} className="w-full h-full object-cover" />
-                          ) : (
-                            isCap ? "⭐" : player.name.slice(0, 2).toUpperCase()
-                          )}
+                          {player.image_url
+                            ? <img src={player.image_url} alt={player.name} className="w-full h-full object-cover" />
+                            : isCap ? "⭐" : player.name.slice(0, 2).toUpperCase()
+                          }
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1">
                             <p className="font-bold text-sm text-white truncate">{player.name}</p>
                             {isCap && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 rounded-full">CAP</span>}
                           </div>
-                          <p className="text-xs text-zinc-500">
-                            {FLAGS[player.nationality] || "🏳️"} {player.teams?.name} • {player.price} GS$
-                          </p>
+                          <p className="text-xs text-zinc-500">{FLAGS[player.nationality] || "🏳️"} {player.teams?.name} • {player.price} GS$</p>
                         </div>
-                        <button
-                          onClick={() => togglePlayer(player)}
-                          className="text-zinc-600 hover:text-red-400 transition-colors shrink-0"
-                        >
+                        <button onClick={() => togglePlayer(player)} className="text-zinc-600 hover:text-red-400 transition-colors shrink-0">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
@@ -745,9 +674,7 @@ export default function MontarTime() {
                       </>
                     ) : (
                       <div className="flex items-center gap-3 text-zinc-600">
-                        <div className="w-10 h-10 rounded-lg border border-dashed border-white/10 flex items-center justify-center text-lg shrink-0">
-                          {i + 1}
-                        </div>
+                        <div className="w-10 h-10 rounded-lg border border-dashed border-white/10 flex items-center justify-center text-lg shrink-0">{i + 1}</div>
                         <span className="text-sm">Jogador {i + 1}</span>
                       </div>
                     )}
@@ -795,5 +722,20 @@ export default function MontarTime() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function MontarTime() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#090b0f] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-2 border-[#39A900]/30 border-t-[#39A900] rounded-full animate-spin" />
+          <p className="text-zinc-500 text-sm">Carregando...</p>
+        </div>
+      </div>
+    }>
+      <MontarTimeInner />
+    </Suspense>
   );
 }
