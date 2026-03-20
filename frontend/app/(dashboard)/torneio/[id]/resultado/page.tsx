@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import HoloCard from "@/components/card/HoloCard";
@@ -70,7 +70,7 @@ const statusConfig = {
   finished: { label: "Finalizado", color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30", dot: "bg-emerald-400", pulse: false },
 };
 
-export default function ResultadoPage() {
+function ResultadoPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const lineupId = searchParams.get("lineup");
@@ -86,22 +86,15 @@ export default function ResultadoPage() {
   useEffect(() => {
     async function fetchData() {
       if (!lineupId) { setError("Lineup não encontrado."); setLoading(false); return; }
-
       try {
         const supabase = createClient();
-
-        const { data, error } = await supabase
-          .from("lineups").select("*").eq("id", lineupId).single();
+        const { data, error } = await supabase.from("lineups").select("*").eq("id", lineupId).single();
         if (error) throw error;
         setLineup(data);
 
-        // Busca todos os jogadores para resolver MVP/Cone
-        const { data: playersData } = await supabase
-          .from("players")
-          .select("id, name, nationality, image_url, teams(name, color)");
+        const { data: playersData } = await supabase.from("players").select("id, name, nationality, image_url, teams(name, color)");
         if (playersData) setAllPlayers(playersData as any);
 
-        // Busca partidas da fase
         if (data.phase_id) {
           const { data: matchesData } = await supabase
             .from("matches")
@@ -109,7 +102,6 @@ export default function ResultadoPage() {
             .eq("phase_id", data.phase_id);
           if (matchesData) setMatches(matchesData as any);
 
-          // Busca todos os lineups da mesma fase para calcular posição
           if (data.status !== "pending") {
             const { data: phaseLineups } = await supabase
               .from("lineups")
@@ -156,12 +148,10 @@ export default function ResultadoPage() {
   }
 
   const status = statusConfig[lineup.status];
-
   const resolvePlayer = (id: string | null): PlayerFull | null => {
     if (!id) return null;
     return allPlayers.find(p => p.id === id) || null;
   };
-
   const mvpPlayer = resolvePlayer(lineup.mvp_pick_id);
   const conePlayer = resolvePlayer(lineup.cone_pick_id);
 
@@ -202,8 +192,6 @@ export default function ResultadoPage() {
       </header>
 
       <div className="max-w-6xl mx-auto px-6 py-8">
-
-        {/* Score hero */}
         <div className="text-center mb-10">
           {lineup.status === "pending" ? (
             <>
@@ -220,7 +208,6 @@ export default function ResultadoPage() {
           )}
         </div>
 
-        {/* Ranking card */}
         {lineup.status !== "pending" && (
           <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-8 flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -248,7 +235,6 @@ export default function ResultadoPage() {
           </div>
         )}
 
-        {/* Cards do time */}
         <h2 className="text-xl font-black mb-4">Seu Time</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-8">
           {lineup.players.map((player) => {
@@ -299,7 +285,6 @@ export default function ResultadoPage() {
           })}
         </div>
 
-        {/* MVP e Cone */}
         {(lineup.mvp_pick_id || lineup.cone_pick_id) && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
             {lineup.mvp_pick_id && (
@@ -322,12 +307,9 @@ export default function ResultadoPage() {
                       <p className="text-xs text-zinc-500">{FLAGS[mvpPlayer.nationality] || "🏳️"} {(mvpPlayer.teams as any)?.name}</p>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-zinc-500 text-sm">Não escolhido</p>
-                )}
+                ) : <p className="text-zinc-500 text-sm">Não escolhido</p>}
               </div>
             )}
-
             {lineup.cone_pick_id && (
               <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-4">
@@ -348,15 +330,12 @@ export default function ResultadoPage() {
                       <p className="text-xs text-zinc-500">{FLAGS[conePlayer.nationality] || "🏳️"} {(conePlayer.teams as any)?.name}</p>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-zinc-500 text-sm">Não escolhido</p>
-                )}
+                ) : <p className="text-zinc-500 text-sm">Não escolhido</p>}
               </div>
             )}
           </div>
         )}
 
-        {/* Chaveamento */}
         {lineup.bracket_picks && matches.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-4">
@@ -389,7 +368,6 @@ export default function ResultadoPage() {
           </div>
         )}
 
-        {/* Ações */}
         <div className="flex flex-col sm:flex-row gap-3">
           {lineup.status === "finished" && (
             <button
@@ -419,5 +397,20 @@ export default function ResultadoPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResultadoPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#090b0f] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-2 border-[#39A900]/30 border-t-[#39A900] rounded-full animate-spin" />
+          <p className="text-zinc-500 text-sm">Carregando...</p>
+        </div>
+      </div>
+    }>
+      <ResultadoPageInner />
+    </Suspense>
   );
 }

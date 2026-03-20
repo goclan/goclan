@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 
+export const dynamic = 'force-dynamic';
+
 async function getRankingData() {
   try {
     const supabase = await createClient();
@@ -55,7 +57,6 @@ async function getRankingData() {
             players: l.players || [],
           }))
           .sort((a: any, b: any) => b.total_score - a.total_score);
-
         byPhase[phase.id] = phaseLineups;
       });
 
@@ -74,7 +75,6 @@ async function getRankingData() {
       });
 
       const overall = Object.values(overallMap).sort((a: any, b: any) => b.total_score - a.total_score);
-
       rankingByTournament[tournament.id] = { phases: phases || [], byPhase, overall };
     }
 
@@ -100,7 +100,6 @@ function getMedalColor(position: number) {
 
 export default async function RankingPage() {
   const { tournaments, rankingByTournament } = await getRankingData();
-
   const defaultTournament = tournaments[0];
   const defaultData = defaultTournament ? rankingByTournament[defaultTournament.id] : null;
 
@@ -114,9 +113,7 @@ export default async function RankingPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </Link>
-            <a href="/">
-              <img src="/images/Logo.png" alt="GoClan" className="h-8 w-auto" />
-            </a>
+            <a href="/"><img src="/images/Logo.png" alt="GoClan" className="h-8 w-auto" /></a>
           </div>
           <nav className="hidden md:flex items-center gap-8">
             {["Torneios", "Ranking", "Como Funciona", "Planos"].map((item) => (
@@ -128,15 +125,10 @@ export default async function RankingPage() {
       </header>
 
       <div className="max-w-6xl mx-auto px-6 py-10">
-
         <div className="mb-10">
           <p className="text-[#39A900] text-sm font-semibold tracking-widest uppercase mb-2">Classificação</p>
-          <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2">
-            Ranking<br /><span className="text-zinc-500">dos Torneios</span>
-          </h1>
-          {defaultTournament && (
-            <p className="text-zinc-500 text-sm">{defaultTournament.name}</p>
-          )}
+          <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2">Ranking<br /><span className="text-zinc-500">dos Torneios</span></h1>
+          {defaultTournament && <p className="text-zinc-500 text-sm">{defaultTournament.name}</p>}
         </div>
 
         {!defaultTournament || !defaultData ? (
@@ -146,8 +138,6 @@ export default async function RankingPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-            {/* Ranking Geral */}
             <div className="lg:col-span-1">
               <div className="bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden">
                 <div className="px-5 py-4 border-b border-white/5 flex items-center gap-2">
@@ -155,11 +145,8 @@ export default async function RankingPage() {
                   <h2 className="font-black">Ranking Geral</h2>
                   <span className="text-xs text-zinc-500 ml-auto">Somatória</span>
                 </div>
-
                 {defaultData.overall.length === 0 ? (
-                  <div className="px-5 py-8 text-center text-zinc-500 text-sm">
-                    Nenhuma pontuação ainda.
-                  </div>
+                  <div className="px-5 py-8 text-center text-zinc-500 text-sm">Nenhuma pontuação ainda.</div>
                 ) : (
                   <div className="divide-y divide-white/5">
                     {defaultData.overall.map((entry: any, index: number) => {
@@ -181,9 +168,7 @@ export default async function RankingPage() {
                             <p className="text-[10px] text-zinc-500">{entry.phases_played} fase{entry.phases_played !== 1 ? "s" : ""}</p>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className={`font-black text-sm ${index === 0 ? "text-yellow-400" : "text-[#39A900]"}`}>
-                              {entry.total_score}
-                            </p>
+                            <p className={`font-black text-sm ${index === 0 ? "text-yellow-400" : "text-[#39A900]"}`}>{entry.total_score}</p>
                             <p className="text-[10px] text-zinc-500">pts</p>
                           </div>
                         </div>
@@ -194,12 +179,9 @@ export default async function RankingPage() {
               </div>
             </div>
 
-            {/* Ranking por Fase */}
             <div className="lg:col-span-2 flex flex-col gap-6">
               {defaultData.phases.length === 0 ? (
-                <div className="bg-white/[0.02] border border-white/5 rounded-2xl px-5 py-8 text-center text-zinc-500 text-sm">
-                  Nenhuma fase cadastrada.
-                </div>
+                <div className="bg-white/[0.02] border border-white/5 rounded-2xl px-5 py-8 text-center text-zinc-500 text-sm">Nenhuma fase cadastrada.</div>
               ) : (
                 defaultData.phases.map((phase: any) => {
                   const phaseRanking = defaultData.byPhase[phase.id] || [];
@@ -212,70 +194,43 @@ export default async function RankingPage() {
                       <div className="px-5 py-4 border-b border-white/5 flex items-center gap-3">
                         <div className={`w-2 h-2 rounded-full shrink-0 ${isActive ? "bg-orange-400 animate-pulse" : isPending && hasParticipants ? "bg-[#39A900] animate-pulse" : "bg-zinc-600"}`} />
                         <h3 className="font-black">{phase.name}</h3>
-                        {isActive && (
-                          <span className="text-xs bg-orange-500/10 border border-orange-500/30 text-orange-400 px-2 py-0.5 rounded-full font-bold">
-                            Ao Vivo
-                          </span>
-                        )}
-                        {isPending && hasParticipants && (
-                          <span className="text-xs bg-[#39A900]/10 border border-[#39A900]/20 text-[#39A900] px-2 py-0.5 rounded-full font-bold">
-                            Aberta
-                          </span>
-                        )}
-                        {phase.status === "finished" && (
-                          <span className="text-xs bg-zinc-500/10 border border-zinc-500/30 text-zinc-500 px-2 py-0.5 rounded-full font-bold">
-                            Finalizada
-                          </span>
-                        )}
-                        <span className="text-xs text-zinc-500 ml-auto">
-                          {phaseRanking.length} participante{phaseRanking.length !== 1 ? "s" : ""}
-                        </span>
+                        {isActive && <span className="text-xs bg-orange-500/10 border border-orange-500/30 text-orange-400 px-2 py-0.5 rounded-full font-bold">Ao Vivo</span>}
+                        {isPending && hasParticipants && <span className="text-xs bg-[#39A900]/10 border border-[#39A900]/20 text-[#39A900] px-2 py-0.5 rounded-full font-bold">Aberta</span>}
+                        {phase.status === "finished" && <span className="text-xs bg-zinc-500/10 border border-zinc-500/30 text-zinc-500 px-2 py-0.5 rounded-full font-bold">Finalizada</span>}
+                        <span className="text-xs text-zinc-500 ml-auto">{phaseRanking.length} participante{phaseRanking.length !== 1 ? "s" : ""}</span>
                       </div>
 
                       {phaseRanking.length === 0 ? (
-                        <div className="px-5 py-6 text-center text-zinc-500 text-sm">
-                          Nenhum time cadastrado nessa fase ainda.
-                        </div>
+                        <div className="px-5 py-6 text-center text-zinc-500 text-sm">Nenhum time cadastrado nessa fase ainda.</div>
                       ) : (
                         <div className="divide-y divide-white/5">
                           {phaseRanking.map((entry: any, index: number) => {
                             const { bg, border, text, medal } = getMedalColor(index + 1);
                             const displayName = getDisplayName(entry.user);
                             const captainName = entry.captain?.name || "—";
-
                             return (
                               <div key={entry.lineup_id} className={`flex items-center gap-3 px-5 py-3 ${index < 3 && entry.total_score > 0 ? bg : ""} transition-all`}>
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0 border ${index < 3 && entry.total_score > 0 ? `${bg} ${border} ${text}` : "bg-white/5 border-white/10 text-zinc-500"}`}>
                                   {index < 3 && entry.total_score > 0 ? medal : `#${index + 1}`}
                                 </div>
-
                                 <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-black shrink-0 overflow-hidden">
                                   {entry.user?.avatar_url
                                     ? <img src={entry.user.avatar_url} alt={displayName} className="w-full h-full object-cover rounded-full" />
                                     : displayName.slice(0, 2).toUpperCase()
                                   }
                                 </div>
-
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-bold text-white truncate">{displayName}</p>
-                                  <p className="text-[10px] text-zinc-500 truncate">
-                                    Cap: <span className="text-zinc-400">{captainName}</span>
-                                    {" • "}{entry.players.length} jogadores
-                                  </p>
+                                  <p className="text-[10px] text-zinc-500 truncate">Cap: <span className="text-zinc-400">{captainName}</span>{" • "}{entry.players.length} jogadores</p>
                                 </div>
-
                                 <div className="text-right shrink-0">
                                   {entry.total_score > 0 ? (
                                     <>
-                                      <p className={`font-black text-sm ${index === 0 ? "text-yellow-400" : "text-[#39A900]"}`}>
-                                        {entry.total_score}
-                                      </p>
+                                      <p className={`font-black text-sm ${index === 0 ? "text-yellow-400" : "text-[#39A900]"}`}>{entry.total_score}</p>
                                       <p className="text-[10px] text-zinc-500">pts</p>
                                     </>
                                   ) : (
-                                    <span className="text-xs text-zinc-600 bg-white/5 px-2 py-1 rounded-lg">
-                                      Aguardando
-                                    </span>
+                                    <span className="text-xs text-zinc-600 bg-white/5 px-2 py-1 rounded-lg">Aguardando</span>
                                   )}
                                 </div>
                               </div>
