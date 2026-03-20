@@ -82,6 +82,7 @@ export default function StatsPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [savedInfo, setSavedInfo] = useState({ lineups: 0, totalScore: 0 });
 
   const [selectedTournament, setSelectedTournament] = useState("");
   const [selectedPhase, setSelectedPhase] = useState("");
@@ -179,6 +180,7 @@ export default function StatsPage() {
     }
     setSaving(true);
 
+    // 1. Salva a partida
     const { data: matchData, error: matchError } = await supabase
       .from("matches")
       .insert({
@@ -200,6 +202,7 @@ export default function StatsPage() {
       return;
     }
 
+    // 2. Salva os stats dos jogadores
     const statsToInsert = playerStats.map(row => ({
       match_id: matchData.id,
       player_id: row.player_id,
@@ -218,16 +221,34 @@ export default function StatsPage() {
 
     if (statsError) {
       alert("Partida salva mas erro ao salvar stats!");
-    } else {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-      setTeamA("");
-      setTeamB("");
-      setWinnerTeam("");
-      setPlayerStats([]);
-      setSwissRound(r => r + 1);
+      setSaving(false);
+      return;
     }
 
+    // 3. Calcula pontuação dos lineups automaticamente
+    const { error: scoreError } = await supabase.rpc("calculate_lineup_scores", {
+      p_match_id: matchData.id,
+    });
+
+    // 4. Busca quantos lineups foram afetados
+    const { data: lineupsAffected } = await supabase
+      .from("lineups")
+      .select("id, total_score")
+      .eq("tournament_id", selectedTournament)
+      .eq("phase_id", selectedPhase)
+      .eq("status", "active");
+
+    const totalLineups = lineupsAffected?.length || 0;
+
+    setSavedInfo({ lineups: totalLineups, totalScore: 0 });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 5000);
+
+    setTeamA("");
+    setTeamB("");
+    setWinnerTeam("");
+    setPlayerStats([]);
+    setSwissRound(r => r + 1);
     setSaving(false);
   }
 
@@ -250,74 +271,58 @@ export default function StatsPage() {
 
     return (
       <tr key={row.player_id} className="border-b border-white/5 hover:bg-white/[0.02] transition-all">
-        {/* Nome */}
         <td className="p-3 min-w-[100px]">
           <div className="flex items-center gap-1.5">
             <span className="text-xs">{FLAGS[player?.nationality || ""] || "🏳️"}</span>
             <span className="font-bold text-sm text-white">{row.player_name}</span>
           </div>
         </td>
-        {/* Kills */}
         <td className="p-1.5 w-16">
           <input type="number" min={0} max={60} step={1} value={row.kills}
             onChange={(e) => updateStat(row.player_id, "kills", parseInt(e.target.value) || 0)}
             className={inputClass} />
         </td>
-        {/* Deaths */}
         <td className="p-1.5 w-16">
           <input type="number" min={0} max={60} step={1} value={row.deaths}
             onChange={(e) => updateStat(row.player_id, "deaths", parseInt(e.target.value) || 0)}
             className={inputClass} />
         </td>
-        {/* K/D — calculado */}
         <td className="p-1.5 w-16">
           <div className={`${autoClass} ${parseFloat(kd) >= 1 ? "text-emerald-400" : "text-red-400"}`}>
             {kd}
           </div>
         </td>
-        {/* Pts K/D — calculado */}
         <td className="p-1.5 w-14">
-          <div className={`${autoClass} text-yellow-400`}>
-            +{kdPts}
-          </div>
+          <div className={`${autoClass} text-yellow-400`}>+{kdPts}</div>
         </td>
-        {/* Assists */}
         <td className="p-1.5 w-16">
           <input type="number" min={0} max={40} step={1} value={row.assists}
             onChange={(e) => updateStat(row.player_id, "assists", parseInt(e.target.value) || 0)}
             className={inputClass} />
         </td>
-        {/* Multi-kills */}
         <td className="p-1.5 w-14">
           <input type="number" min={0} max={20} step={1} value={row.multi_kills}
             onChange={(e) => updateStat(row.player_id, "multi_kills", parseInt(e.target.value) || 0)}
             className={inputClass} />
         </td>
-        {/* ADR */}
         <td className="p-1.5 w-20">
           <input type="number" min={0} max={200} step={0.1} value={row.adr}
             onChange={(e) => updateStat(row.player_id, "adr", parseFloat(e.target.value) || 0)}
             className={inputClass} />
         </td>
-        {/* Rating */}
         <td className="p-1.5 w-16">
           <input type="number" min={0} max={3} step={0.01} value={row.rating}
             onChange={(e) => updateStat(row.player_id, "rating", parseFloat(e.target.value) || 0)}
             className={inputClass} />
         </td>
-        {/* KAST% */}
         <td className="p-1.5 w-16">
           <input type="number" min={0} max={100} step={0.1} value={row.kast}
             onChange={(e) => updateStat(row.player_id, "kast", parseFloat(e.target.value) || 0)}
             className={inputClass} />
         </td>
-        {/* Pts Jogador — calculado */}
         <td className="p-1.5 w-20">
-          <div className={`${autoClass} text-[#39A900] text-base`}>
-            {score}
-          </div>
+          <div className={`${autoClass} text-[#39A900] text-base`}>{score}</div>
         </td>
-        {/* Resultado */}
         <td className="p-3 text-center w-24">
           <span className={`text-xs font-bold px-2 py-1 rounded-full ${row.team_won ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}>
             {row.team_won ? "✓ Vitória" : "✗ Derrota"}
@@ -331,10 +336,8 @@ export default function StatsPage() {
     if (teamPlayers.length === 0) return null;
     return (
       <>
-        <div
-          className="px-4 py-2 flex items-center justify-between"
-          style={{ backgroundColor: `${teamData?.color}15`, borderBottom: `1px solid ${teamData?.color}20` }}
-        >
+        <div className="px-4 py-2 flex items-center justify-between"
+          style={{ backgroundColor: `${teamData?.color}15`, borderBottom: `1px solid ${teamData?.color}20` }}>
           <div className="flex items-center gap-2">
             <span className="font-black text-sm" style={{ color: teamData?.color }}>{teamData?.name}</span>
             {isWinner && <span className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">🏆 Vencedor</span>}
@@ -377,9 +380,18 @@ export default function StatsPage() {
       </div>
 
       {saved && (
-        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 mb-6 flex items-center gap-3">
-          <span className="text-emerald-400 text-xl">✓</span>
-          <p className="text-sm text-emerald-400 font-bold">Partida e stats salvos com sucesso!</p>
+        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-emerald-400 text-xl">✓</span>
+            <div>
+              <p className="text-sm text-emerald-400 font-bold">Partida e stats salvos com sucesso!</p>
+              <p className="text-xs text-emerald-400/70 mt-0.5">
+                {savedInfo.lineups > 0
+                  ? `${savedInfo.lineups} lineup(s) de usuários atualizados automaticamente`
+                  : "Nenhum lineup de usuário encontrado para esta fase ainda"}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -472,12 +484,12 @@ export default function StatsPage() {
       {playerStats.length > 0 && (
         <div className="flex items-center gap-4 mb-3 px-1">
           <span className="text-xs text-zinc-500">Campos editáveis → fundo escuro</span>
-          <span className="text-xs text-yellow-500/70">Campos amarelos → calculados automaticamente</span>
-          <span className="text-xs text-[#39A900]/80">Pts Total → pontuação final do jogador</span>
+          <span className="text-xs text-yellow-500/70">Amarelo → calculado automaticamente</span>
+          <span className="text-xs text-[#39A900]/80">Verde → pontuação final</span>
         </div>
       )}
 
-      {/* Tabela de stats */}
+      {/* Tabela */}
       {playerStats.length > 0 && (
         <div className="bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden mb-6">
           <div className="p-4 border-b border-white/5 flex items-center justify-between">
@@ -487,7 +499,7 @@ export default function StatsPage() {
             </div>
             {winnerTeam && (
               <div className="text-right">
-                <p className="text-xs text-zinc-500">Pontuação total da partida</p>
+                <p className="text-xs text-zinc-500">Total da partida</p>
                 <p className="font-black text-white">{(totalScoreA + totalScoreB).toFixed(2)} pts</p>
               </div>
             )}
@@ -501,7 +513,7 @@ export default function StatsPage() {
         <button onClick={handleSave}
           disabled={saving || !selectedTournament || !selectedPhase || !teamA || !teamB || !winnerTeam}
           className="w-full bg-[#39A900] hover:bg-[#45C500] disabled:bg-zinc-700 disabled:text-zinc-500 text-black font-black py-4 rounded-2xl transition-all text-lg">
-          {saving ? "Salvando..." : "✓ Salvar Partida e Stats"}
+          {saving ? "Calculando pontuações..." : "✓ Salvar Partida e Stats"}
         </button>
       )}
 

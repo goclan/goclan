@@ -1,43 +1,71 @@
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 
 async function getTournaments() {
   try {
-    const API_KEY = process.env.PANDASCORE_API_KEY;
-    const headers = { Authorization: `Bearer ${API_KEY}` };
+    const supabase = await createClient();
 
-    const [running, upcoming, past] = await Promise.all([
-      fetch("https://api.pandascore.co/csgo/tournaments/running?sort=begin_at&page[size]=10", { headers, next: { revalidate: 300 } }).then(r => r.json()),
-      fetch("https://api.pandascore.co/csgo/tournaments/upcoming?sort=begin_at&page[size]=10", { headers, next: { revalidate: 300 } }).then(r => r.json()),
-      fetch("https://api.pandascore.co/csgo/tournaments/past?sort=-begin_at&page[size]=5", { headers, next: { revalidate: 3600 } }).then(r => r.json()),
-    ]);
+    const { data: tournaments, error } = await supabase
+      .from("tournaments")
+      .select("*")
+      .order("begin_at", { ascending: false });
 
-    const mapStatus = (t: any, status: string) => ({
-      id: t.id,
-      name: t.name,
-      full_name: t.full_name || t.name,
-      status,
-      begin_at: t.begin_at,
-      end_at: t.end_at,
-      prizepool: t.prizepool,
-      league: t.league,
-      serie: t.serie,
-      teams: t.teams || [],
+    if (error) throw error;
+    if (!tournaments) return [];
+
+    // Busca todas as fases com número total de fases por torneio
+    const { data: allPhases } = await supabase
+      .from("phases")
+      .select("id, tournament_id, status, name, phase_number")
+      .order("phase_number");
+
+    // Mapeia fase ativa e total de fases por torneio
+    const phasesByTournament: Record<string, any[]> = {};
+    (allPhases || []).forEach((p: any) => {
+      if (!phasesByTournament[p.tournament_id]) phasesByTournament[p.tournament_id] = [];
+      phasesByTournament[p.tournament_id].push(p);
     });
 
-    return [
-      ...running.map((t: any) => mapStatus(t, "EM ANDAMENTO")),
-      ...upcoming.map((t: any) => mapStatus(t, "ABERTO")),
-      ...past.map((t: any) => mapStatus(t, "FINALIZADO")),
-    ];
+    // Busca contagem de lineups por fase ativa
+    const activePhaseIds = (allPhases || [])
+      .filter((p: any) => p.status === "active" || p.status === "pending")
+      .map((p: any) => p.id);
+
+    let lineupCountByPhase: Record<string, number> = {};
+    if (activePhaseIds.length > 0) {
+      const { data: lineups } = await supabase
+        .from("lineups")
+        .select("phase_id")
+        .in("phase_id", activePhaseIds);
+
+      (lineups || []).forEach((l: any) => {
+        if (l.phase_id) {
+          lineupCountByPhase[l.phase_id] = (lineupCountByPhase[l.phase_id] || 0) + 1;
+        }
+      });
+    }
+
+    return tournaments.map((t: any) => {
+      const phases = phasesByTournament[t.id] || [];
+      const totalPhases = phases.length;
+      const activePhase = phases.find((p: any) => p.status === "active" || p.status === "pending");
+
+      return {
+        ...t,
+        activePhase: activePhase || null,
+        totalPhases,
+        participants: activePhase ? (lineupCountByPhase[activePhase.id] || 0) : 0,
+      };
+    });
   } catch {
     return [];
   }
 }
 
 const statusConfig = {
-  "ABERTO": { bg: "bg-emerald-500/10", border: "border-emerald-500/30", text: "text-emerald-400", dot: "bg-emerald-400", pulse: true, color: "#39A900" },
-  "EM ANDAMENTO": { bg: "bg-orange-500/10", border: "border-orange-500/30", text: "text-orange-400", dot: "bg-orange-400", pulse: true, color: "#FF6B00" },
-  "FINALIZADO": { bg: "bg-zinc-500/10", border: "border-zinc-500/30", text: "text-zinc-500", dot: "bg-zinc-500", pulse: false, color: "#666666" },
+  active: { label: "EM ANDAMENTO", bg: "bg-orange-500/10", border: "border-orange-500/30", text: "text-orange-400", dot: "bg-orange-400", pulse: true, color: "#FF6B00" },
+  upcoming: { label: "ABERTO", bg: "bg-emerald-500/10", border: "border-emerald-500/30", text: "text-emerald-400", dot: "bg-emerald-400", pulse: true, color: "#39A900" },
+  finished: { label: "FINALIZADO", bg: "bg-zinc-500/10", border: "border-zinc-500/30", text: "text-zinc-500", dot: "bg-zinc-500", pulse: false, color: "#666666" },
 };
 
 function formatDate(dateStr: string) {
@@ -47,6 +75,7 @@ function formatDate(dateStr: string) {
 
 export default async function Dashboard() {
   const tournaments = await getTournaments();
+  const active = tournaments.filter((t: any) => t.status === "active");
 
   return (
     <div className="min-h-screen bg-[#090b0f] text-white">
@@ -75,7 +104,7 @@ export default async function Dashboard() {
           </div>
           <div className="hidden md:flex items-center gap-4 text-right">
             <div>
-              <p className="text-2xl font-black text-[#39A900]">{tournaments.filter((t: any) => t.status === "EM ANDAMENTO").length}</p>
+              <p className="text-2xl font-black text-[#39A900]">{active.length}</p>
               <p className="text-xs text-zinc-500 uppercase tracking-wider">Ao vivo agora</p>
             </div>
             <div className="w-px h-10 bg-white/10" />
@@ -90,47 +119,80 @@ export default async function Dashboard() {
       <div className="max-w-7xl mx-auto px-6 pb-16">
         {tournaments.length === 0 ? (
           <div className="text-center py-20 text-zinc-500">
-            <p className="text-lg">Nenhum torneio disponível no momento.</p>
+            <p className="text-lg mb-2">Nenhum torneio disponível no momento.</p>
+            <p className="text-sm">Cadastre torneios no <a href="/admin/torneios" className="text-[#39A900] hover:underline">painel admin</a>.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {tournaments.map((tournament: any) => {
-              const status = statusConfig[tournament.status as keyof typeof statusConfig] || statusConfig["FINALIZADO"];
+              const status = statusConfig[tournament.status as keyof typeof statusConfig] || statusConfig.finished;
               const encodedName = encodeURIComponent(tournament.name);
+              const hasActivePhase = !!tournament.activePhase;
+              const currentPhaseNumber = tournament.activePhase?.phase_number || 0;
+              const totalPhases = tournament.totalPhases || 0;
+
               return (
                 <div key={tournament.id} className="group relative bg-white/[0.02] border border-white/5 rounded-2xl p-6 hover:border-white/10 hover:bg-white/[0.04] transition-all duration-300 overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-0 group-hover:opacity-10 transition-opacity duration-500 blur-3xl" style={{ backgroundColor: status.color }} />
-                  <div className="flex items-start justify-between mb-6">
+
+                  {/* Header do card */}
+                  <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      {tournament.league?.image_url ? (
-                        <img src={tournament.league.image_url} alt={tournament.league.name} className="w-12 h-12 rounded-xl object-contain bg-white/5 p-1" />
+                      {tournament.image_url ? (
+                        <img src={tournament.image_url} alt={tournament.name} className="w-12 h-12 rounded-xl object-contain bg-white/5 p-1" />
                       ) : (
-                        <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-zinc-400">{tournament.name?.[0] || "?"}</div>
+                        <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xl font-black text-zinc-400">
+                          {tournament.name?.[0] || "?"}
+                        </div>
                       )}
                       <div>
                         <h3 className="font-bold text-white text-lg leading-tight">{tournament.name}</h3>
-                        <p className="text-zinc-500 text-sm">{tournament.league?.name || "CS2"}</p>
+                        <p className="text-zinc-500 text-sm">{tournament.full_name || "CS2 • Tier S"}</p>
                       </div>
                     </div>
                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold ${status.bg} ${status.border} ${status.text}`}>
                       <div className={`w-1.5 h-1.5 rounded-full ${status.dot} ${status.pulse ? "animate-pulse" : ""}`} />
-                      {tournament.status}
+                      {status.label}
                     </div>
                   </div>
+
+                  {/* Fase ativa com rodada e participantes */}
+                  {hasActivePhase && (
+                    <div className="mb-4 flex items-center justify-between bg-[#39A900]/10 border border-[#39A900]/20 rounded-xl px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#39A900] animate-pulse" />
+                        <p className="text-xs text-[#39A900] font-bold">{tournament.activePhase.name}</p>
+                        {totalPhases > 0 && (
+                          <span className="text-xs text-[#39A900]/60 font-bold">
+                            • Rodada {currentPhaseNumber}/{totalPhases}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-[#39A900]/80">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span className="font-bold">{tournament.participants}</span>
+                        <span className="text-[#39A900]/50">participantes</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-3 gap-4 mb-6">
                     <div className="bg-white/5 rounded-xl p-3">
                       <p className="text-zinc-500 text-xs uppercase tracking-wider mb-1">Premiação</p>
                       <p className="font-black text-white text-sm">{tournament.prizepool || "A definir"}</p>
                     </div>
                     <div className="bg-white/5 rounded-xl p-3">
-                      <p className="text-zinc-500 text-xs uppercase tracking-wider mb-1">Times</p>
-                      <p className="font-black text-white">{tournament.teams?.length || "?"}</p>
+                      <p className="text-zinc-500 text-xs uppercase tracking-wider mb-1">Início</p>
+                      <p className="font-black text-white text-sm">{formatDate(tournament.begin_at)}</p>
                     </div>
                     <div className="bg-white/5 rounded-xl p-3">
                       <p className="text-zinc-500 text-xs uppercase tracking-wider mb-1">Jogo</p>
                       <p className="font-black text-[#39A900]">CS2</p>
                     </div>
                   </div>
+
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-zinc-500 text-sm">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -138,20 +200,29 @@ export default async function Dashboard() {
                       </svg>
                       {formatDate(tournament.begin_at)} → {formatDate(tournament.end_at)}
                     </div>
-                    {tournament.status === "ABERTO" && (
-                      <Link href={`/torneio?tournament=${tournament.id}&name=${encodedName}`} className="flex items-center gap-2 bg-[#39A900] hover:bg-[#45C500] text-black text-sm font-black px-4 py-2 rounded-xl transition-colors">
+
+                    {hasActivePhase && tournament.status !== "finished" && (
+                      <Link
+                        href={`/torneio?tournament=${tournament.id}&name=${encodedName}`}
+                        className="flex items-center gap-2 bg-[#39A900] hover:bg-[#45C500] text-black text-sm font-black px-4 py-2 rounded-xl transition-colors"
+                      >
                         Montar Time
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
                       </Link>
                     )}
-                    {tournament.status === "EM ANDAMENTO" && (
-                      <Link href={`/torneio?tournament=${tournament.id}&name=${encodedName}`} className="flex items-center gap-2 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-400 text-sm font-black px-4 py-2 rounded-xl transition-colors">
-                        Ver Ao Vivo
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
-                      </Link>
+
+                    {tournament.status === "finished" && (
+                      <button className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-500 text-sm font-bold px-4 py-2 rounded-xl transition-colors">
+                        Ver Resultado
+                      </button>
                     )}
-                    {tournament.status === "FINALIZADO" && (
-                      <button className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-500 text-sm font-bold px-4 py-2 rounded-xl transition-colors">Ver Resultado</button>
+
+                    {!hasActivePhase && tournament.status !== "finished" && (
+                      <span className="text-xs text-zinc-600 border border-white/5 px-3 py-2 rounded-xl">
+                        Inscrições em breve
+                      </span>
                     )}
                   </div>
                 </div>

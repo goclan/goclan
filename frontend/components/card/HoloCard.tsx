@@ -8,6 +8,8 @@ interface HoloCardProps {
     name: string;
     first_name?: string;
     last_name?: string;
+    nationality?: string;
+    image_url?: string | null;
     team: string | { id: string; name: string; acronym: string; image_url: string | null; color: string };
     country: string;
     role: string;
@@ -21,6 +23,7 @@ interface HoloCardProps {
   isSelected: boolean;
   isCaptain: boolean;
   isDisabled: boolean;
+  readOnly?: boolean;
   onClick: () => void;
   onCaptainClick: (e: React.MouseEvent) => void;
 }
@@ -49,12 +52,11 @@ function clamp(v: number, min = 0, max = 100) {
   return Math.min(Math.max(v, min), max);
 }
 
-function getSimulatedImage(playerId: string): string {
+function getFallbackImage(playerId: string): string {
   const seed = parseInt(playerId.replace(/\D/g, "").slice(-4) || "1") % 100;
   return `https://picsum.photos/seed/${seed}/300/400`;
 }
 
-// Textura de foil por tier
 function getFoilTexture(tier: string): string {
   switch (tier) {
     case "prisma": return "/images/textures/rainbow.jpg";
@@ -66,7 +68,7 @@ function getFoilTexture(tier: string): string {
 }
 
 export default function HoloCard({
-  player, isSelected, isCaptain, isDisabled, onClick, onCaptainClick,
+  player, isSelected, isCaptain, isDisabled, readOnly = false, onClick, onCaptainClick,
 }: HoloCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -86,16 +88,15 @@ export default function HoloCard({
   const tier = getHoloTier(player.price);
   const tierInfo = getTierInfo(tier);
   const foilTexture = getFoilTexture(tier);
-  const simulatedImage = getSimulatedImage(String(player.id));
+  const playerImage = player.image_url || getFallbackImage(String(player.id));
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!cardRef.current || isDisabled || isFlipped) return;
+    if (!cardRef.current || isFlipped) return;
     const rect = cardRef.current.getBoundingClientRect();
     const x = clamp(((e.clientX - rect.left) / rect.width) * 100);
     const y = clamp(((e.clientY - rect.top) / rect.height) * 100);
     const cx = x - 50;
     const cy = y - 50;
-
     setMouse({
       x, y,
       rx: -(cy / 3.5),
@@ -115,10 +116,13 @@ export default function HoloCard({
     fromCenter: 0, opacity: 0,
   });
 
-  const handleAdd = (e: React.MouseEvent) => { e.stopPropagation(); onClick(); };
-  const handleFlip = (e: React.MouseEvent) => {
+  const handleCardClick = () => {
+    if (!isDisabled && !readOnly) onClick();
+  };
+
+  const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isDisabled) { handleMouseLeave(); setIsFlipped(!isFlipped); }
+    if (!readOnly) onClick();
   };
 
   const o = mouse.opacity;
@@ -128,13 +132,11 @@ export default function HoloCard({
       className="relative select-none"
       style={{ perspective: "900px", width: "100%", aspectRatio: "3/4" }}
     >
-      {/* Glow selecionado */}
       {isSelected && (
         <div className="absolute inset-0 pointer-events-none z-50"
           style={{ boxShadow: "0 0 0 2px #39A900, 0 0 25px #39A90080, 0 0 50px #39A90040", borderRadius: "16px" }} />
       )}
 
-      {/* Aura tier premium */}
       {(tier === "prisma" || tier === "galaxy") && !isSelected && (
         <div className="absolute pointer-events-none"
           style={{
@@ -147,7 +149,25 @@ export default function HoloCard({
         />
       )}
 
-      {/* Flip container */}
+      {/* Botão stats → FORA do flip container, sempre acessível */}
+      {!isFlipped && (
+        <div
+          className="absolute right-2 z-30 cursor-pointer"
+          style={{ bottom: readOnly ? "10px" : "50px" }}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            handleMouseLeave();
+            setIsFlipped(true);
+          }}
+        >
+          <span className="text-[8px] rounded-full px-2 py-0.5"
+            style={{ color: tierInfo.color, backgroundColor: "rgba(0,0,0,0.55)", border: `1px solid ${tierInfo.color}30` }}>
+            stats →
+          </span>
+        </div>
+      )}
+
       <div
         ref={cardRef}
         onMouseMove={handleMouseMove}
@@ -162,26 +182,30 @@ export default function HoloCard({
 
         {/* ══════════ FRENTE ══════════ */}
         <div
-          className="absolute inset-0 rounded-2xl overflow-hidden"
-          style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
+          className={`absolute inset-0 rounded-2xl overflow-hidden ${!readOnly ? "cursor-pointer" : ""}`}
+          style={{
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
+            pointerEvents: isFlipped ? "none" : "auto",
+          }}
+          onClick={handleCardClick}
         >
-          {/* Imagem do jogador */}
           <img
-            src={simulatedImage}
+            src={playerImage}
             alt={player.name}
             className="absolute inset-0 w-full h-full object-cover"
             style={{ objectPosition: "center top" }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = getFallbackImage(String(player.id));
+            }}
           />
 
-          {/* Gradiente escuro sobre imagem */}
           <div className="absolute inset-0 pointer-events-none"
             style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 40%, rgba(0,0,0,0.7) 75%, rgba(0,0,0,0.97) 100%)" }}
           />
 
-          {/* ── SHINE: grain + glitter com color-dodge suave ── */}
           {tier !== "none" && (
-            <div
-              className="absolute inset-0 rounded-2xl pointer-events-none"
+            <div className="absolute inset-0 rounded-2xl pointer-events-none"
               style={{
                 backgroundImage: `url(/images/textures/grain.webp), url(/images/textures/glitter.png)`,
                 backgroundSize: `cover, 25%`,
@@ -194,10 +218,8 @@ export default function HoloCard({
             />
           )}
 
-          {/* ── FOIL: textura específica do tier ── */}
           {foilTexture && (
-            <div
-              className="absolute inset-0 rounded-2xl pointer-events-none"
+            <div className="absolute inset-0 rounded-2xl pointer-events-none"
               style={{
                 backgroundImage: `url(${foilTexture})`,
                 backgroundSize: tier === "prisma" ? "200% 200%" : tier === "galaxy" ? "250% 250%" : "180% 180%",
@@ -209,44 +231,20 @@ export default function HoloCard({
             />
           )}
 
-          {/* ── GLARE: reflexo radial seguindo o mouse ── */}
-          <div
-            className="absolute inset-0 rounded-2xl pointer-events-none"
+          <div className="absolute inset-0 rounded-2xl pointer-events-none"
             style={{
-              background: `radial-gradient(
-                farthest-corner circle at ${mouse.x}% ${mouse.y}%,
-                rgba(255,255,255,${tier === "prisma" ? 0.18 : tier === "chrome" ? 0.08 : 0.13}) 0%,
-                rgba(255,255,255,0.04) 45%,
-                rgba(0,0,0,0.25) 100%
-              )`,
+              background: `radial-gradient(farthest-corner circle at ${mouse.x}% ${mouse.y}%, rgba(255,255,255,${tier === "prisma" ? 0.18 : tier === "chrome" ? 0.08 : 0.13}) 0%, rgba(255,255,255,0.04) 45%, rgba(0,0,0,0.25) 100%)`,
               mixBlendMode: "overlay",
               opacity: o * 0.7,
             }}
           />
 
-          {/* ── RAINBOW: iridescência para prisma e galaxy ── */}
           {(tier === "prisma" || tier === "galaxy") && (
-            <div
-              className="absolute inset-0 rounded-2xl pointer-events-none"
+            <div className="absolute inset-0 rounded-2xl pointer-events-none"
               style={{
                 backgroundImage: tier === "prisma"
-                  ? `repeating-linear-gradient(
-                      ${mouse.fromLeft * 180}deg,
-                      rgba(255,0,0,0.12) 0%,
-                      rgba(255,140,0,0.12) 12%,
-                      rgba(255,255,0,0.12) 24%,
-                      rgba(0,255,0,0.12) 36%,
-                      rgba(0,200,255,0.12) 48%,
-                      rgba(128,0,255,0.12) 60%,
-                      rgba(255,0,200,0.12) 72%,
-                      rgba(255,0,0,0.12) 84%
-                    )`
-                  : `radial-gradient(
-                      ellipse at ${mouse.x}% ${mouse.y}%,
-                      rgba(180,100,255,0.22) 0%,
-                      rgba(60,120,255,0.18) 35%,
-                      transparent 65%
-                    )`,
+                  ? `repeating-linear-gradient(${mouse.fromLeft * 180}deg, rgba(255,0,0,0.12) 0%, rgba(255,140,0,0.12) 12%, rgba(255,255,0,0.12) 24%, rgba(0,255,0,0.12) 36%, rgba(0,200,255,0.12) 48%, rgba(128,0,255,0.12) 60%, rgba(255,0,200,0.12) 72%, rgba(255,0,0,0.12) 84%)`
+                  : `radial-gradient(ellipse at ${mouse.x}% ${mouse.y}%, rgba(180,100,255,0.22) 0%, rgba(60,120,255,0.18) 35%, transparent 65%)`,
                 mixBlendMode: "color-dodge",
                 opacity: o * (tier === "prisma" ? 0.7 : 0.55),
               }}
@@ -265,55 +263,61 @@ export default function HoloCard({
             </div>
           </div>
 
-          {/* Hint flip */}
-          <div className="absolute right-2 z-20 cursor-pointer" style={{ bottom: "50px" }} onClick={handleFlip}>
-            <span className="text-[8px] rounded-full px-2 py-0.5"
-              style={{ color: tierInfo.color, backgroundColor: "rgba(0,0,0,0.55)", border: `1px solid ${tierInfo.color}30` }}>
-              stats →
-            </span>
-          </div>
+          {/* Footer normal */}
+          {!readOnly && (
+            <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center justify-between px-3 py-2"
+              style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.6) 60%, transparent 100%)" }}>
+              <div>
+                <p className="font-black text-xs" style={{ color: tierInfo.color }}>{player.price} GS$</p>
+                <p className="text-zinc-400 text-[9px]">{player.role} • {teamName}</p>
+              </div>
+              <button
+                onClick={handleAdd}
+                className={`rounded-lg font-black text-[9px] px-2.5 py-1.5 transition-all backdrop-blur-sm ${
+                  isSelected ? "bg-[#39A900] text-black" : "bg-white/20 hover:bg-[#39A900] hover:text-black text-white"
+                }`}
+              >
+                {isSelected ? "✓ No Time" : "+ Adicionar"}
+              </button>
+            </div>
+          )}
 
-          {/* Footer */}
-          <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center justify-between px-3 py-2"
-            style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.6) 60%, transparent 100%)" }}>
-            <div>
+          {/* Footer readOnly */}
+          {readOnly && (
+            <div className="absolute bottom-0 left-0 right-0 z-20 px-3 pb-2 pt-4"
+              style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.4) 80%, transparent 100%)" }}>
               <p className="font-black text-xs" style={{ color: tierInfo.color }}>{player.price} GS$</p>
               <p className="text-zinc-400 text-[9px]">{player.role} • {teamName}</p>
             </div>
-            <button
-              onClick={handleAdd}
-              className={`rounded-lg font-black text-[9px] px-2.5 py-1.5 transition-all backdrop-blur-sm ${
-                isSelected ? "bg-[#39A900] text-black" : "bg-white/20 hover:bg-[#39A900] hover:text-black text-white"
-              }`}
-            >
-              {isSelected ? "✓ No Time" : "+ Adicionar"}
-            </button>
-          </div>
+          )}
         </div>
 
         {/* ══════════ VERSO ══════════ */}
         <div
           className="absolute inset-0 rounded-2xl overflow-hidden"
           style={{
-            backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden",
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
             transform: "rotateY(180deg)",
             background: "#0d1117",
             border: `1px solid ${teamColor}30`,
+            pointerEvents: isFlipped ? "auto" : "none",
           }}
         >
-          {/* Imagem desfocada */}
           <div className="absolute inset-0 overflow-hidden">
-            <img src={simulatedImage} alt="" className="w-full h-full object-cover"
+            <img src={playerImage} alt="" className="w-full h-full object-cover"
               style={{ objectPosition: "center top", opacity: 0.15, filter: "blur(8px) saturate(0.3)" }} />
             <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, transparent 0%, #0d1117 75%)" }} />
           </div>
 
-          {/* Header verso */}
           <div className="relative z-10 flex items-center gap-2 px-3 py-2"
             style={{ borderBottom: `1px solid ${teamColor}30` }}>
-            <div className="rounded-lg flex items-center justify-center font-black shrink-0"
+            <div className="rounded-lg flex items-center justify-center font-black shrink-0 overflow-hidden"
               style={{ width: 26, height: 26, backgroundColor: `${teamColor}20`, color: teamColor, fontSize: 10 }}>
-              {initials[0]}
+              {player.image_url
+                ? <img src={player.image_url} alt={player.name} className="w-full h-full object-cover" />
+                : initials[0]
+              }
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-black text-white text-xs truncate">{player.name}</p>
@@ -325,7 +329,6 @@ export default function HoloCard({
             </span>
           </div>
 
-          {/* Stats */}
           <div className="relative z-10 px-3 py-2 flex flex-col gap-1.5" style={{ height: "calc(100% - 88px)" }}>
             {[
               { label: "Rating", value: player.rating.toFixed(2), color: ratingColor, bar: ((player.rating - 0.8) / 0.8) * 100 },
@@ -347,19 +350,24 @@ export default function HoloCard({
             ))}
           </div>
 
-          {/* Footer verso */}
           <div className="absolute bottom-0 left-0 right-0 flex items-center gap-2 p-2 z-10"
             style={{ borderTop: `1px solid ${teamColor}20` }}>
-            <button onClick={handleFlip}
-              className="flex-1 py-1 rounded-lg text-[9px] font-bold text-zinc-500 hover:text-white bg-white/5 hover:bg-white/10 transition-all border border-white/10">
+            <button
+              onClick={(e) => { e.stopPropagation(); handleMouseLeave(); setIsFlipped(false); }}
+              className="flex-1 py-1 rounded-lg text-[9px] font-bold text-zinc-500 hover:text-white bg-white/5 hover:bg-white/10 transition-all border border-white/10"
+            >
               ← Voltar
             </button>
-            <button onClick={handleAdd}
-              className={`flex-1 py-1 rounded-lg text-[9px] font-black transition-all ${
-                isSelected ? "bg-[#39A900] text-black" : "bg-white/10 hover:bg-[#39A900] hover:text-black text-white border border-white/20"
-              }`}>
-              {isSelected ? "✓ No Time" : "+ Adicionar"}
-            </button>
+            {!readOnly && (
+              <button
+                onClick={handleAdd}
+                className={`flex-1 py-1 rounded-lg text-[9px] font-black transition-all ${
+                  isSelected ? "bg-[#39A900] text-black" : "bg-white/10 hover:bg-[#39A900] hover:text-black text-white border border-white/20"
+                }`}
+              >
+                {isSelected ? "✓ No Time" : "+ Adicionar"}
+              </button>
+            )}
           </div>
         </div>
       </div>
